@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>koti — the agentic-native home</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* ============ koti · Soft Peak design tokens ============ */
+  :root{
+    --ink:#1c1b18;
+    --ink-soft:#26251f;
+    --chalk:#faf9f5;
+    --paper:#ecebe7;
+    --sand:#e9e4d9;
+    --sage:oklch(0.68 0.045 150);
+    --sage-deep:oklch(0.52 0.05 150);
+    --ember:oklch(0.72 0.11 60);
+    --ember-bright:oklch(0.80 0.12 60);
+    --muted:#6d6a61;
+    --faint:#8a877e;
+    --line:#e2e0d8;
+    --wordmark-track:0.42em;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --sans:'Outfit',-apple-system,system-ui,sans-serif;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:var(--sans);
+    background:var(--paper);
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+    overflow-x:hidden;
+    min-height:100vh;
+    position:relative;
+  }
+
+  /* warm atmosphere: soft radial glow + film grain */
+  body::before{
+    content:"";
+    position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:
+      radial-gradient(120% 90% at 82% -10%, rgba(233,228,217,0.9) 0%, rgba(236,235,231,0) 55%),
+      radial-gradient(90% 70% at 8% 108%, rgba(224,231,222,0.55) 0%, rgba(236,235,231,0) 50%);
+  }
+  body::after{
+    content:"";
+    position:fixed;inset:0;z-index:0;pointer-events:none;opacity:0.035;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .wrap{position:relative;z-index:2;max-width:1240px;margin:0 auto;padding:0 40px}
+
+  /* ============ nav ============ */
+  header{
+    position:relative;z-index:3;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:30px 0 0;
+  }
+  .lockup{display:flex;align-items:center;gap:15px;color:var(--ink);text-decoration:none}
+  .lockup:hover{color:var(--ink)}
+  .lockup .sym{width:40px;height:28px;display:block}
+  .lockup .divider{width:1px;height:26px;background:rgba(28,27,24,0.22)}
+  .lockup .word{
+    font-weight:300;font-size:22px;letter-spacing:var(--wordmark-track);
+    margin-right:calc(-1 * var(--wordmark-track));line-height:1;
+  }
+
+  nav{display:flex;align-items:center;gap:38px}
+  nav a{
+    font-size:14px;color:var(--muted);text-decoration:none;letter-spacing:0.01em;
+    transition:color .25s ease;position:relative;
+  }
+  nav a:not(.cta)::after{
+    content:"";position:absolute;left:0;bottom:-5px;height:1px;width:0;
+    background:var(--ink);transition:width .3s ease;
+  }
+  nav a:not(.cta):hover{color:var(--ink)}
+  nav a:not(.cta):hover::after{width:100%}
+  .cta{
+    font-size:13.5px;color:var(--ink);border:1px solid var(--ink);
+    padding:9px 18px;border-radius:99px;transition:all .28s ease;
+    display:inline-flex;align-items:center;gap:8px;
+  }
+  .cta:hover{background:var(--ink);color:var(--chalk)}
+  .cta .dot{width:6px;height:6px;border-radius:50%;background:var(--ember);flex:none}
+
+  .menu-btn{display:none}
+
+  /* ============ hero ============ */
+  .hero{
+    display:grid;grid-template-columns:1.08fr 0.92fr;gap:72px;align-items:center;
+    padding:clamp(60px,9vh,120px) 0 96px;
+  }
+
+  h1{
+    font-weight:300;font-size:clamp(44px,6vw,82px);line-height:1.06;
+    letter-spacing:-0.022em;margin-bottom:30px;
+  }
+  h1 .line2{display:block}
+
+  .lede{
+    font-size:clamp(17px,1.35vw,19.5px);line-height:1.62;color:var(--muted);
+    max-width:33ch;margin-bottom:40px;font-weight:300;
+  }
+  .lede strong{color:var(--ink);font-weight:500}
+
+  .actions{display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-bottom:52px}
+  .btn-primary{
+    background:var(--ink);color:var(--chalk);border:none;cursor:pointer;
+    font-family:var(--sans);font-size:15.5px;font-weight:400;letter-spacing:0.01em;
+    padding:15px 30px;border-radius:99px;display:inline-flex;align-items:center;gap:11px;
+    transition:transform .3s cubic-bezier(.22,1,.36,1),box-shadow .3s ease;
+    box-shadow:0 1px 2px rgba(28,27,24,0.14);
+  }
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 30px -12px rgba(28,27,24,0.5)}
+  .btn-primary .arrow{transition:transform .3s ease}
+  .btn-primary:hover .arrow{transform:translateX(4px)}
+  .btn-ghost{
+    background:none;border:none;cursor:pointer;color:var(--ink);
+    font-family:var(--sans);font-size:15.5px;font-weight:400;
+    display:inline-flex;align-items:center;gap:10px;padding:14px 4px;position:relative;
+  }
+  .btn-ghost span{position:relative;transition:opacity .3s ease}
+  .btn-ghost:hover span{opacity:0.6}
+  .btn-ghost .play{width:26px;height:26px;border-radius:50%;border:1px solid var(--ink);display:grid;place-items:center;transition:background .3s ease}
+  .btn-ghost .play svg{width:9px;height:9px}
+  .btn-ghost .play svg path{transition:fill .3s ease}
+  .btn-ghost:hover .play{background:var(--ink)}
+  .btn-ghost:hover .play svg path{fill:var(--chalk)}
+
+  .marks{display:flex;gap:38px;flex-wrap:wrap}
+  .mark{display:flex;flex-direction:column;gap:5px}
+  .mark .k{font-family:var(--mono);font-size:12px;letter-spacing:0.08em;color:var(--faint);text-transform:uppercase}
+  .mark .v{font-size:15px;color:var(--ink);font-weight:400}
+
+  /* ============ iPhone mockup — the koti app on iOS ============ */
+  .device{
+    display:flex;justify-content:center;
+    opacity:0;transform:translateY(24px) scale(0.985);
+    animation:rise 1.05s cubic-bezier(.22,1,.36,1) .45s forwards;
+  }
+  .phone{
+    position:relative;width:300px;flex:none;
+    background:linear-gradient(155deg,#3a3933 0%,#1c1b18 44%,#100f14 100%);
+    border-radius:52px;padding:11px;
+    box-shadow:
+      0 55px 100px -45px rgba(28,27,24,0.72),
+      0 4px 10px rgba(28,27,24,0.18),
+      inset 0 0 0 1.5px rgba(250,249,245,0.13);
+  }
+  .phone-screen{
+    position:relative;height:636px;border-radius:42px;overflow:hidden;
+    background:#f6f4ee;display:flex;flex-direction:column;
+    /* iPhone 15/16 Pro: 393pt logical screen mapped onto this 278px canvas */
+    --pt:calc(278px / 393);
+  }
+  /* status bar — fixed row flush to the top of the screen (top 0, height 54pt).
+     Clock + right cluster are absolutely centered on the 29.7pt line. */
+  .ios-status{position:relative;flex:none;height:calc(54 * var(--pt));z-index:2}
+  .ios-time{
+    position:absolute;left:calc(27 * var(--pt));top:calc(29.7 * var(--pt));
+    transform:translateY(-50%);
+    font-size:calc(17 * var(--pt));font-weight:600;letter-spacing:0.01em;
+    color:var(--ink);line-height:1;
+  }
+  .ios-ind{
+    position:absolute;right:calc(22 * var(--pt));top:calc(29.7 * var(--pt));
+    transform:translateY(-50%);
+    display:flex;align-items:center;gap:calc(6 * var(--pt));color:var(--ink);
+  }
+  .ios-ind svg{display:block;height:calc(11.5 * var(--pt));width:auto}
+  /* Dynamic Island — overlay, centered on the FULL screen width.
+     125×37.33pt, radius 18.66pt, top 11pt → vertical center 29.7pt (shared line). */
+  .island{
+    position:absolute;top:calc(11 * var(--pt));left:50%;transform:translateX(-50%);
+    width:calc(125 * var(--pt));height:calc(37.33 * var(--pt));
+    border-radius:calc(18.66 * var(--pt));background:#000;z-index:4;
+  }
+  /* app body */
+  .app{flex:1;min-height:0;overflow:hidden;padding:calc(5 * var(--pt)) 22px 0;display:flex;flex-direction:column;gap:16px}
+  .app-head{display:flex;align-items:center;justify-content:space-between}
+  .app-head .brand{display:flex;align-items:center;gap:9px}
+  .app-head .brand svg{width:26px;height:18px}
+  .app-head .brand .w{font-weight:300;font-size:15px;letter-spacing:0.3em;margin-right:-0.3em;color:var(--ink)}
+  .app-av{width:34px;height:34px;border-radius:50%;background:var(--sand);color:var(--ink);display:grid;place-items:center;font-size:12px;font-weight:500}
+  .app-greet .hi{font-size:21px;font-weight:400;letter-spacing:-0.01em;color:var(--ink)}
+  .app-greet .sub{display:flex;align-items:center;gap:7px;margin-top:5px;font-size:12.5px;color:var(--muted)}
+  .app-greet .sub .p{width:6px;height:6px;border-radius:50%;background:var(--ember);flex:none}
+  /* focal state card */
+  .state{background:var(--ink);border-radius:20px;padding:17px 18px 15px;color:var(--chalk);position:relative;overflow:hidden}
+  .state::before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(80% 65% at 88% -5%, oklch(0.72 0.11 60 / 0.24), transparent 62%)}
+  .state .lab{font-family:var(--mono);font-size:9.5px;letter-spacing:0.16em;text-transform:uppercase;color:rgba(250,249,245,0.5);position:relative}
+  .state .big{font-size:19px;font-weight:400;margin-top:7px;position:relative}
+  .state .row{display:flex;gap:16px;margin-top:14px;position:relative}
+  .state .stat{display:flex;flex-direction:column;gap:2px}
+  .state .stat .v{font-size:15px;font-weight:500;line-height:1.1}
+  .state .stat .v.ember{color:var(--ember-bright)}
+  .state .stat .k{font-size:10px;color:rgba(250,249,245,0.5)}
+  /* activity feed */
+  .app-sec{font-family:var(--mono);font-size:9.5px;letter-spacing:0.14em;text-transform:uppercase;color:var(--faint)}
+  .app-feed{list-style:none;display:flex;flex-direction:column;margin-top:-4px}
+  .app-feed li{display:grid;grid-template-columns:auto 1fr;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+  .app-feed li:first-child{border-top:none}
+  .app-feed .t{font-family:var(--mono);font-size:11px;color:var(--faint);display:flex;gap:7px;padding-top:1px;white-space:nowrap}
+  .app-feed .t i{width:5px;height:5px;border-radius:50%;background:var(--ember);margin-top:5px;flex:none}
+  .app-feed .x{font-size:13px;line-height:1.4;color:var(--ink);font-weight:300}
+  .app-feed .x b{font-weight:500}
+  /* tab bar + home indicator */
+  .ios-tabs{
+    flex:none;display:flex;justify-content:space-around;align-items:flex-start;
+    /* controls sit above the 34pt bottom safe-area inset */
+    padding:11px 14px calc(34 * var(--pt));border-top:1px solid var(--line);background:rgba(246,244,238,0.92);
+  }
+  .ios-tabs a{display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--faint);text-decoration:none;font-size:9.5px}
+  .ios-tabs a svg{width:22px;height:22px;display:block}
+  .ios-tabs a.active{color:var(--ink)}
+  /* home indicator — bare pill overlay: 144×5pt, radius 2.5pt, 8pt off the bottom, centered */
+  .ios-home{
+    position:absolute;left:50%;bottom:calc(8 * var(--pt));transform:translateX(-50%);
+    width:calc(144 * var(--pt));height:calc(5 * var(--pt));
+    border-radius:calc(2.5 * var(--pt));background:#000;z-index:4;
+  }
+
+  /* ============ quiet feature strip ============ */
+  .strip{
+    position:relative;z-index:2;border-top:1px solid var(--line);
+    display:grid;grid-template-columns:repeat(3,1fr);gap:0;
+  }
+  .strip .cell{padding:34px 34px 40px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:12px}
+  .strip .cell:last-child{border-right:none}
+  .strip .cell .ic{width:30px;height:21px}
+  .strip .cell h3{font-size:17px;font-weight:500;letter-spacing:-0.01em}
+  .strip .cell p{font-size:14.5px;line-height:1.55;color:var(--muted);font-weight:300;max-width:32ch}
+
+  /* ============ footer ============ */
+  .footer{position:relative;z-index:2;background:var(--ink);color:var(--chalk);margin-top:110px}
+  .footer .wrap{padding-top:76px;padding-bottom:34px}
+  .footer-top{
+    display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:44px;
+    padding-bottom:56px;border-bottom:1px solid rgba(250,249,245,0.1);
+  }
+  .footer-brand{display:flex;flex-direction:column;gap:22px;max-width:330px}
+  .footer .lockup{gap:14px}
+  .footer .lockup .word{color:var(--chalk)}
+  .footer .lockup .divider{background:rgba(250,249,245,0.28)}
+  .f-tag{font-size:14.5px;line-height:1.6;color:rgba(250,249,245,0.52);font-weight:300}
+  .socials{display:flex;gap:11px}
+  .socials a{
+    width:38px;height:38px;border-radius:50%;border:1px solid rgba(250,249,245,0.18);
+    display:grid;place-items:center;color:rgba(250,249,245,0.72);
+    transition:background .28s ease,color .28s ease,border-color .28s ease,transform .28s ease;
+  }
+  .socials a:hover{background:var(--chalk);color:var(--ink);border-color:var(--chalk);transform:translateY(-2px)}
+  .socials svg{width:17px;height:17px;display:block}
+  .f-col{display:flex;flex-direction:column;gap:13px}
+  .f-col h4{
+    font-family:var(--mono);font-size:11px;letter-spacing:0.16em;text-transform:uppercase;
+    color:rgba(250,249,245,0.42);margin-bottom:5px;font-weight:500;
+  }
+  .f-col a{font-size:14.5px;color:rgba(250,249,245,0.7);text-decoration:none;width:fit-content;transition:color .22s ease}
+  .f-col a:hover{color:var(--chalk)}
+  .footer-bottom{
+    padding-top:26px;display:flex;justify-content:space-between;align-items:center;
+    gap:18px;flex-wrap:wrap;
+  }
+  .footer-bottom .copy{font-size:13px;color:rgba(250,249,245,0.45);display:flex;align-items:center;gap:9px}
+  .footer-bottom .copy .status{width:6px;height:6px;border-radius:50%;background:var(--ember);flex:none}
+  .footer-legal{display:flex;gap:24px}
+  .footer-legal a{font-size:13px;color:rgba(250,249,245,0.45);text-decoration:none;transition:color .22s ease}
+  .footer-legal a:hover{color:var(--chalk)}
+
+  /* ============ animations ============ */
+  @keyframes rise{to{opacity:1;transform:translateY(0) scale(1)}}
+  @keyframes item{to{opacity:1;transform:translateY(0)}}
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 0 var(--ember-bright)}
+    70%{box-shadow:0 0 0 8px transparent}
+    100%{box-shadow:0 0 0 0 transparent}
+  }
+  .reveal{opacity:0;transform:translateY(14px);animation:item .9s cubic-bezier(.22,1,.36,1) forwards}
+  .d1{animation-delay:.15s}.d2{animation-delay:.28s}.d3{animation-delay:.41s}
+  .d4{animation-delay:.54s}.d5{animation-delay:.67s}.d6{animation-delay:.8s}
+
+  /* ============ responsive ============ */
+  @media(max-width:940px){
+    .hero{grid-template-columns:1fr;gap:56px;padding-top:52px}
+    nav{gap:22px}
+    nav a:not(.cta){display:none}
+  }
+  @media(max-width:940px){
+    .footer-top{grid-template-columns:1fr 1fr;gap:40px 32px}
+    .footer-brand{grid-column:1 / -1;max-width:none}
+  }
+  @media(max-width:680px){
+    .wrap{padding:0 24px}
+    .strip{grid-template-columns:1fr}
+    .strip .cell{border-right:none;border-top:1px solid var(--line)}
+    .strip .cell:first-child{border-top:none}
+    .lede{max-width:none}
+    .marks{gap:26px}
+    .footer-top{grid-template-columns:1fr 1fr;gap:34px 24px}
+    .footer-bottom{flex-direction:column;align-items:flex-start;gap:14px}
+  }
+  @media(prefers-reduced-motion:reduce){
+    *{animation:none!important}
+    .reveal,.device{opacity:1!important;transform:none!important}
+  }
+</style>
+</head>
+<body>
+
+  <div class="wrap">
+    <header>
+      <a class="lockup" href="#" aria-label="koti home">
+        <svg class="sym" viewBox="0 0 64 44" aria-hidden="true">
+          <path d="M8 38 Q32 2 56 38" fill="none" stroke="#1c1b18" stroke-width="4" stroke-linecap="round"/>
+          <circle cx="32" cy="34" r="3.5" fill="#1c1b18"/>
+        </svg>
+        <span class="divider"></span>
+        <span class="word">koti</span>
+      </a>
+      <nav>
+        <a href="#">System</a>
+        <a href="#">Agents</a>
+        <a href="#">Hardware</a>
+        <a href="#">Manifesto</a>
+        <a class="cta" href="#"><span class="dot"></span>Request access</a>
+      </nav>
+    </header>
+
+    <main class="hero">
+      <!-- editorial statement -->
+      <section>
+        <h1>
+          <span class="reveal d2" style="display:block">A home that</span>
+          <span class="reveal d3 line2">keeps itself.</span>
+        </h1>
+
+        <p class="lede reveal d4">
+          koti is an agentic-native operating system for the home — a <strong>quiet intelligence</strong> that notices what's needed and simply handles it. No dashboards to tend. No scenes to script. It just works, the way home should.
+        </p>
+
+        <div class="actions reveal d5">
+          <button class="btn-primary">Request access <span class="arrow">→</span></button>
+          <button class="btn-ghost">
+            <span class="play"><svg viewBox="0 0 10 10" fill="none"><path d="M2 1.2 8 5 2 8.8Z" fill="#1c1b18"/></svg></span>
+            <span>See how it thinks</span>
+          </button>
+        </div>
+
+        <div class="marks reveal d6">
+          <div class="mark"><span class="k">Runs</span><span class="v">Local-first, always</span></div>
+          <div class="mark"><span class="k">Learns</span><span class="v">Your rhythms, quietly</span></div>
+          <div class="mark"><span class="k">Speaks</span><span class="v">Plainly, on request</span></div>
+        </div>
+      </section>
+
+      <!-- the koti app on iPhone -->
+      <aside class="device" aria-label="The koti app on iPhone">
+        <div class="phone">
+          <div class="phone-screen">
+            <div class="island"></div>
+            <div class="ios-status">
+              <span class="ios-time">9:41</span>
+              <span class="ios-ind">
+                <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor" aria-hidden="true"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="6" width="3" height="6" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+                <svg width="17" height="13" viewBox="0 0 18 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M6.88 8.88 A3 3 0 0 1 11.12 8.88"/><path d="M5.11 7.11 A5.5 5.5 0 0 1 12.89 7.11"/><path d="M3.34 5.34 A8 8 0 0 1 14.66 5.34"/><circle cx="9" cy="11" r="1.15" fill="currentColor" stroke="none"/></svg>
+                <svg width="24" height="12" viewBox="0 0 26 12" fill="none" aria-hidden="true"><rect x="1" y="1" width="21" height="10" rx="3" stroke="currentColor" stroke-opacity="0.35"/><rect x="3" y="3" width="15" height="6" rx="1.5" fill="currentColor"/><rect x="23.4" y="4" width="1.8" height="4" rx="0.9" fill="currentColor" fill-opacity="0.35"/></svg>
+              </span>
+            </div>
+
+            <div class="app">
+              <div class="app-head">
+                <span class="brand">
+                  <svg viewBox="0 0 64 44" aria-hidden="true"><path d="M8 38 Q32 2 56 38" fill="none" stroke="#1c1b18" stroke-width="4" stroke-linecap="round"/><circle cx="32" cy="34" r="3.5" fill="#1c1b18"/></svg>
+                  <span class="w">koti</span>
+                </span>
+                <span class="app-av">CG</span>
+              </div>
+
+              <div class="app-greet">
+                <div class="hi">Good evening, Chris.</div>
+                <div class="sub"><span class="p"></span>Home is present · all rooms calm</div>
+              </div>
+
+              <div class="state">
+                <div class="lab">Right now</div>
+                <div class="big">Everything's handled.</div>
+                <div class="row">
+                  <span class="stat"><span class="v">21°</span><span class="k">Ambient</span></span>
+                  <span class="stat"><span class="v ember">Calm</span><span class="k">Home mode</span></span>
+                  <span class="stat"><span class="v">3</span><span class="k">Agents on watch</span></span>
+                </div>
+              </div>
+
+              <div class="app-sec">Today · handled for you</div>
+              <ul class="app-feed">
+                <li><span class="t"><i></i>07:12</span><span class="x"><b>Warmed the studio</b> before your first call.</span></li>
+                <li><span class="t"><i></i>09:40</span><span class="x"><b>Paused idle heating</b> at the open back door.</span></li>
+                <li><span class="t"><i></i>13:05</span><span class="x"><b>Dropped the west blinds</b> to hold 21°.</span></li>
+                <li><span class="t"><i></i>18:30</span><span class="x"><b>Lights low, kettle on</b> — you're 10 min out.</span></li>
+              </ul>
+            </div>
+
+            <nav class="ios-tabs">
+              <a href="#" class="active">
+                <svg viewBox="0 0 64 44" fill="none" aria-hidden="true"><path d="M8 38 Q32 2 56 38" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"/><circle cx="32" cy="34" r="4" fill="currentColor"/></svg>
+                Home
+              </a>
+              <a href="#">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></svg>
+                Rooms
+              </a>
+              <a href="#">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M12 3v3.4M12 17.6V21M3 12h3.4M17.6 12H21M5.6 5.6l2.4 2.4M16 16l2.4 2.4M18.4 5.6 16 8M8 16l-2.4 2.4"/><circle cx="12" cy="12" r="3.2"/></svg>
+                Agents
+              </a>
+              <a href="#">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.3"/><circle cx="9" cy="17" r="2.3"/></svg>
+                Settings
+              </a>
+            </nav>
+            <div class="ios-home"></div>
+          </div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <!-- quiet feature strip -->
+  <div class="wrap">
+    <section class="strip">
+      <div class="cell">
+        <svg class="ic" viewBox="0 0 64 44" aria-hidden="true"><path d="M8 38 Q32 2 56 38" fill="none" stroke="#1c1b18" stroke-width="4" stroke-linecap="round"/><circle cx="32" cy="34" r="3.5" fill="#1c1b18"/></svg>
+        <h3>Agents, not automations</h3>
+        <p>No brittle if-this-then-that. koti reasons about your home and acts with judgment, then explains itself if you ask.</p>
+      </div>
+      <div class="cell">
+        <svg class="ic" viewBox="0 0 64 44" aria-hidden="true"><path d="M8 38 Q32 2 56 38" fill="none" stroke="#1c1b18" stroke-width="4" stroke-linecap="round"/><circle cx="32" cy="34" r="3.5" fill="oklch(0.72 0.11 60)"/></svg>
+        <h3>Yours, kept close</h3>
+        <p>The intelligence lives in the house. Decisions happen on-device, local-first — the cloud is optional, never assumed.</p>
+      </div>
+      <div class="cell">
+        <svg class="ic" viewBox="0 0 64 44" aria-hidden="true"><path d="M8 38 Q32 2 56 38" fill="none" stroke="oklch(0.52 0.05 150)" stroke-width="4" stroke-linecap="round"/><circle cx="32" cy="34" r="3.5" fill="oklch(0.72 0.11 60)"/></svg>
+        <h3>Calm by default</h3>
+        <p>The best interface is none. koti stays quiet, speaks only when it matters, and leaves the last word to you.</p>
+      </div>
+    </section>
+  </div>
+
+  <!-- footer -->
+  <footer class="footer">
+    <div class="wrap">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <a class="lockup" href="#" aria-label="koti home">
+            <svg class="sym" viewBox="0 0 64 44" aria-hidden="true">
+              <path d="M8 38 Q32 2 56 38" fill="none" stroke="#faf9f5" stroke-width="4" stroke-linecap="round"/>
+              <circle cx="32" cy="34" r="3.5" fill="#faf9f5"/>
+            </svg>
+            <span class="divider"></span>
+            <span class="word">koti</span>
+          </a>
+          <p class="f-tag">The agentic-native home. A quiet intelligence that notices, decides, and acts — kept close, on your terms.</p>
+          <div class="socials">
+            <a href="#" aria-label="Instagram">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5.2"/><circle cx="12" cy="12" r="4"/><circle cx="17.2" cy="6.8" r="1.1" fill="currentColor" stroke="none"/></svg>
+            </a>
+            <a href="#" aria-label="TikTok">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.6 5.82a4.28 4.28 0 0 1-1.06-2.82h-3.2v11.6a2.44 2.44 0 1 1-2.44-2.44c.24 0 .48.03.7.1V9.02a5.7 5.7 0 0 0-.7-.05 5.62 5.62 0 1 0 5.62 5.62V8.9a7.5 7.5 0 0 0 4.34 1.38V7.1a4.28 4.28 0 0 1-3.26-1.28Z"/></svg>
+            </a>
+            <a href="#" aria-label="X">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24h-6.66l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z"/></svg>
+            </a>
+            <a href="#" aria-label="YouTube">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M23 12s0-3.2-.41-4.74a2.4 2.4 0 0 0-1.69-1.7C19.36 5.15 12 5.15 12 5.15s-7.36 0-8.9.41a2.4 2.4 0 0 0-1.69 1.7C1 8.8 1 12 1 12s0 3.2.41 4.74a2.4 2.4 0 0 0 1.69 1.7c1.54.41 8.9.41 8.9.41s7.36 0 8.9-.41a2.4 2.4 0 0 0 1.69-1.7C23 15.2 23 12 23 12Zm-13 3.02V8.98L15.2 12 10 15.02Z"/></svg>
+            </a>
+          </div>
+        </div>
+
+        <div class="f-col">
+          <h4>Product</h4>
+          <a href="#">System</a>
+          <a href="#">Agents</a>
+          <a href="#">Hardware</a>
+          <a href="#">Integrations</a>
+          <a href="#">Pricing</a>
+        </div>
+
+        <div class="f-col">
+          <h4>Company</h4>
+          <a href="#">About us</a>
+          <a href="#">Manifesto</a>
+          <a href="#">Careers</a>
+          <a href="#">Press</a>
+          <a href="#">Contact</a>
+        </div>
+
+        <div class="f-col">
+          <h4>Support</h4>
+          <a href="#">Help center</a>
+          <a href="#">Documentation</a>
+          <a href="#">System status</a>
+          <a href="#">Community</a>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <span class="copy"><span class="status"></span>© 2026 koti. Made for calm homes.</span>
+        <div class="footer-legal">
+          <a href="#">Privacy</a>
+          <a href="#">Terms</a>
+          <a href="#">Cookies</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>
