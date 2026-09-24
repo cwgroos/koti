@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Urinal Simulator Pro Max</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800;900&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --bg:#e4ebe8;
+    --surface:#f6f9f8;
+    --surface-2:#ecf1ef;
+    --ink:#13201c;
+    --muted:#52625c;
+    --faint:#7d8c86;
+    --line:#c7d3cf;
+    --accent:#e6a700;
+    --accent-strong:#c98f00;
+    --accent-ink:#795600;
+    --accent-soft:rgba(230,167,0,.16);
+    --good:#1c7b52;
+    --good-soft:rgba(28,123,82,.12);
+    --bad:#b3420e;
+    --bad-soft:rgba(179,66,14,.12);
+    --porcelain:#ffffff;
+    --shadow:0 1px 0 rgba(19,32,28,.04),0 12px 32px -18px rgba(19,32,28,.35);
+    --display:'Big Shoulders Display','Arial Narrow',Impact,sans-serif;
+    --sans:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme:dark;
+      --bg:#0d1412;
+      --surface:#141e1b;
+      --surface-2:#1a2723;
+      --ink:#e3ece9;
+      --muted:#93a69f;
+      --faint:#6c7f78;
+      --line:#283934;
+      --accent:#f2bc2c;
+      --accent-strong:#f2bc2c;
+      --accent-ink:#f5c94f;
+      --accent-soft:rgba(242,188,44,.14);
+      --good:#4cc38a;
+      --good-soft:rgba(76,195,138,.13);
+      --bad:#f07c4a;
+      --bad-soft:rgba(240,124,74,.14);
+      --porcelain:#dfe6e4;
+      --shadow:0 1px 0 rgba(0,0,0,.2),0 16px 36px -20px rgba(0,0,0,.8);
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --bg:#0d1412;
+    --surface:#141e1b;
+    --surface-2:#1a2723;
+    --ink:#e3ece9;
+    --muted:#93a69f;
+    --faint:#6c7f78;
+    --line:#283934;
+    --accent:#f2bc2c;
+    --accent-strong:#f2bc2c;
+    --accent-ink:#f5c94f;
+    --accent-soft:rgba(242,188,44,.14);
+    --good:#4cc38a;
+    --good-soft:rgba(76,195,138,.13);
+    --bad:#f07c4a;
+    --bad-soft:rgba(240,124,74,.14);
+    --porcelain:#dfe6e4;
+    --shadow:0 1px 0 rgba(0,0,0,.2),0 16px 36px -20px rgba(0,0,0,.8);
+  }
+
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  html,body{margin:0}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font:15px/1.55 var(--sans);
+    -webkit-font-smoothing:antialiased;
+    padding-inline:clamp(16px,3vw,40px);
+    padding-block:0 48px;
+  }
+  .page{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+  h1,h2,h3{margin:0;text-wrap:balance}
+  p{margin:0}
+  button{font:inherit;color:inherit}
+  :focus-visible{outline:2px solid var(--accent-strong);outline-offset:2px;border-radius:4px}
+  .mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+  /* ---------- masthead ---------- */
+  .masthead{
+    display:grid;grid-template-columns:minmax(0,1fr) minmax(0,420px);gap:12px 40px;align-items:end;
+    padding-top:28px;
+  }
+  .plate{display:flex;align-items:center;gap:16px}
+  .glyph{
+    flex:none;width:56px;height:56px;border-radius:12px;background:var(--ink);color:var(--bg);
+    display:grid;place-items:center;
+  }
+  .glyph svg{width:34px;height:34px;display:block}
+  .eyebrow{
+    font:500 11.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+    display:block;margin-bottom:8px;
+  }
+  h1{
+    font-family:var(--display);font-weight:900;text-transform:uppercase;
+    font-size:clamp(40px,7vw,84px);line-height:.86;letter-spacing:.005em;
+  }
+  h1 .pm{
+    display:inline-block;background:var(--accent);color:#1d1600;padding:.02em .16em .06em;border-radius:.08em;
+    transform:translateY(-.03em);
+  }
+  .lede{color:var(--muted);max-width:52ch;font-size:15.5px}
+
+  /* ---------- lab: viewport + controls ---------- */
+  .lab{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:20px;align-items:start}
+  .viewport{
+    position:relative;width:100%;aspect-ratio:16/10;max-width:100%;border-radius:14px;overflow:hidden;
+    background:#cfd9d6;box-shadow:var(--shadow);
+  }
+  .viewport canvas{display:block;width:100%;height:100%;touch-action:none}
+  .hud{position:absolute;display:flex;gap:8px;flex-wrap:wrap;pointer-events:none}
+  .hud > *{pointer-events:auto}
+  .hud.tl{top:12px;left:12px;right:140px}
+  .hud.tr{top:12px;right:12px}
+  .hud.bl{left:12px;bottom:12px;right:12px;justify-content:space-between;align-items:flex-end}
+  .chip{
+    display:inline-flex;align-items:center;gap:8px;background:rgba(14,22,20,.78);color:#eef4f2;
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    border-radius:999px;padding:6px 12px;font:500 12.5px/1.2 var(--sans);
+  }
+  .chip .dot{width:8px;height:8px;border-radius:50%;background:#f2bc2c;box-shadow:0 0 0 3px rgba(242,188,44,.25)}
+  .chip .dot.idle{background:#7fa197;box-shadow:none}
+  .chip .t{font-family:var(--mono);color:#b9c8c3}
+  .seg{display:inline-flex;background:rgba(14,22,20,.78);border-radius:999px;padding:3px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+  .seg button{
+    border:0;background:transparent;color:#c3d1cc;font:500 12px/1 var(--sans);padding:7px 11px;border-radius:999px;cursor:pointer;
+  }
+  .seg button[aria-pressed="true"]{background:#eef4f2;color:#13201c}
+  .meters{display:flex;gap:8px;flex-wrap:wrap}
+  .meter{
+    background:rgba(14,22,20,.78);color:#eef4f2;border-radius:10px;padding:8px 12px;min-width:132px;
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  }
+  .meter .k{font:500 10.5px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:#9fb3ac}
+  .meter .v{font:800 24px/1.05 var(--display);letter-spacing:.01em;margin-top:4px}
+  .meter .v small{font:500 12px var(--mono);color:#b9c8c3;margin-left:3px}
+  .timelapse{font:400 11px/1.3 var(--mono);color:#dbe5e2;background:rgba(14,22,20,.6);padding:5px 9px;border-radius:6px;max-width:260px}
+  .nogl{position:absolute;inset:0;display:grid;place-items:center;padding:24px;text-align:center;color:#27352f;font-weight:500}
+
+  .controls{
+    background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 18px 16px;
+    display:flex;flex-direction:column;gap:16px;
+  }
+  .controls h2,.section-h{font:800 13px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+  .field label{font-weight:600;font-size:14px}
+  .field output{font:500 13px var(--mono);font-variant-numeric:tabular-nums;color:var(--ink);text-align:right}
+  .field .hint{font-size:12.5px;color:var(--muted)}
+  input[type=range]{width:100%;accent-color:var(--accent-strong);margin:2px 0;height:22px}
+  .presets{display:flex;gap:6px;flex-wrap:wrap}
+  .pill{
+    border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:5px 10px;
+    font:500 12.5px/1.2 var(--sans);cursor:pointer;
+  }
+  .pill:hover{border-color:var(--faint)}
+  .pill[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent-strong);color:var(--accent-ink)}
+  details.tech{border-top:1px solid var(--line);padding-top:12px}
+  details.tech summary{cursor:pointer;font-weight:600;font-size:14px;list-style:none;display:flex;justify-content:space-between;align-items:center}
+  details.tech summary::-webkit-details-marker{display:none}
+  details.tech summary::after{content:"+";font:500 16px var(--mono);color:var(--muted)}
+  details.tech[open] summary::after{content:"–"}
+  details.tech .inner{display:flex;flex-direction:column;gap:14px;margin-top:14px}
+  .actions{display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:14px}
+  .btn{
+    border:1px solid var(--line);background:var(--surface-2);border-radius:10px;padding:9px 14px;font-weight:600;font-size:14px;cursor:pointer;
+    display:inline-flex;align-items:center;gap:8px;
+  }
+  .btn:hover{border-color:var(--faint)}
+  .btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+  .btn.primary:hover{opacity:.9}
+  .btn[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent-strong);color:var(--accent-ink)}
+  .btn:disabled{opacity:.55;cursor:progress}
+  .check{display:flex;gap:8px;align-items:center;font-size:13.5px;color:var(--muted)}
+  .check input{accent-color:var(--accent-strong);width:16px;height:16px}
+
+  /* ---------- report ---------- */
+  .report{display:flex;flex-direction:column;gap:16px}
+  .report-head{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap}
+  .report-head h2{font:900 clamp(30px,4vw,44px)/.95 var(--display);text-transform:uppercase;letter-spacing:.01em}
+  .verdict{
+    font-size:16px;max-width:68ch;padding:12px 16px;border-radius:10px;background:var(--surface);border:1px solid var(--line);
+  }
+  .verdict strong{font-weight:600}
+  .cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+  .card{
+    background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;
+    display:flex;flex-direction:column;gap:16px;min-width:0;
+  }
+  .card-head{display:flex;gap:14px;align-items:flex-start}
+  .tag{
+    flex:none;width:44px;height:44px;border-radius:9px;display:grid;place-items:center;
+    font:900 28px/1 var(--display);background:var(--ink);color:var(--bg);
+  }
+  .card-head h3{font:800 24px/1 var(--display);text-transform:uppercase;letter-spacing:.02em}
+  .card-head p{color:var(--muted);font-size:13.5px;margin-top:4px}
+  .score{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;
+    border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:12px 0}
+  .score .big{font:900 56px/.85 var(--display);letter-spacing:.005em}
+  .score .big small{font:500 15px var(--mono);color:var(--muted);margin-left:6px;letter-spacing:0}
+  .score .sub{font-size:13px;color:var(--muted);margin-top:6px}
+  .grade{
+    font:600 12.5px/1 var(--sans);padding:7px 11px;border-radius:999px;white-space:nowrap;
+    background:var(--surface-2);border:1px solid var(--line);
+  }
+  .grade.good{background:var(--good-soft);border-color:transparent;color:var(--good)}
+  .grade.warn{background:var(--accent-soft);border-color:transparent;color:var(--accent-ink)}
+  .grade.bad{background:var(--bad-soft);border-color:transparent;color:var(--bad)}
+  .figs{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:12px}
+  .fig{display:flex;flex-direction:column;gap:6px;min-width:0}
+  .fig canvas{width:100%;display:block;border-radius:8px;background:var(--surface-2)}
+  .fig figcaption,.cap{font:400 11.5px/1.35 var(--mono);color:var(--muted)}
+  figure{margin:0}
+  .zones{display:flex;flex-direction:column;gap:6px}
+  .zone{display:grid;grid-template-columns:62px minmax(0,1fr) 74px;gap:10px;align-items:center;font-size:13px}
+  .zone .bar{height:8px;border-radius:4px;background:var(--surface-2);overflow:hidden}
+  .zone .bar i{display:block;height:100%;background:var(--accent);border-radius:4px;min-width:0}
+  .zone .val{font:500 12.5px var(--mono);text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+  .zone.hot .val{color:var(--ink)}
+  dl.readout{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 14px;margin:0;font-size:13.5px}
+  dl.readout dt{color:var(--muted)}
+  dl.readout dd{margin:0;font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums;text-align:right}
+  .fates{display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--surface-2)}
+  .fates i{display:block;height:100%}
+  .legend{display:flex;gap:12px;flex-wrap:wrap;font:400 11.5px var(--mono);color:var(--muted)}
+  .legend span{display:inline-flex;gap:5px;align-items:center}
+  .legend b{width:9px;height:9px;border-radius:2px;display:inline-block}
+  .stance{display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:14px;font-size:13.5px}
+  .stance .out{color:var(--muted);flex:1 1 200px}
+  .stance .out b{color:var(--ink);font-weight:600}
+
+  /* ---------- notes ---------- */
+  .notes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px 40px;border-top:1px solid var(--line);padding-top:24px}
+  .notes h2{font:900 30px/1 var(--display);text-transform:uppercase;letter-spacing:.01em;grid-column:1/-1}
+  .notes ol.steps{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:16px;counter-reset:step}
+  .steps > li{counter-increment:step;display:grid;grid-template-columns:28px minmax(0,1fr);gap:4px 10px}
+  .steps > li::before{content:counter(step);font:800 20px/1.1 var(--display);color:var(--accent-ink)}
+  .steps > li h3{font-size:15px;font-weight:600}
+  .steps > li p{grid-column:2;color:var(--muted);font-size:14px;max-width:62ch}
+  .notes code{font:13px var(--mono);background:var(--surface-2);padding:1px 5px;border-radius:4px;color:var(--ink);white-space:nowrap}
+  .refs{display:flex;flex-direction:column;gap:12px;font-size:13.5px;color:var(--muted)}
+  .refs h3{font:800 13px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .refs ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px}
+  .refs em{color:var(--ink);font-style:italic}
+  .caveat{padding:12px 14px;border-radius:10px;background:var(--surface);border:1px solid var(--line)}
+
+  @media (max-width:1020px){
+    .lab{grid-template-columns:minmax(0,1fr)}
+    .cards{grid-template-columns:minmax(0,1fr)}
+    .masthead{grid-template-columns:minmax(0,1fr)}
+  }
+  @media (max-width:640px){
+    .viewport{aspect-ratio:4/5}
+    .notes{grid-template-columns:minmax(0,1fr)}
+    .figs{grid-template-columns:minmax(0,1fr)}
+    .hud.tl{right:12px;top:52px}
+    .meter{min-width:0;padding:6px 10px}
+    .meter .v{font-size:20px}
+    .timelapse{display:none}
+    .score .big{font-size:46px}
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{scroll-behavior:auto!important}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="masthead">
+    <div class="plate">
+      <div class="glyph" aria-hidden="true">
+        <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="17" cy="5.5" r="3" fill="currentColor" stroke="none"/>
+          <path d="M11 11h12l-1.5 9h-2l-1 11h-3l-1-11h-2z" fill="currentColor" stroke="none"/>
+          <path d="M26 14c3 2 4 5 3 8" stroke-dasharray="1.5 3"/>
+        </svg>
+      </div>
+      <div>
+        <span class="eyebrow">Splashback physics lab · Men's room, stalls A &amp; B</span>
+        <h1>Urinal Simulator <span class="pm">Pro Max</span></h1>
+      </div>
+    </div>
+    <p class="lede">Set your height and stream velocity. A test subject walks in, uses both urinals, and a Monte-Carlo splash model traces every returning droplet to the exact spot on his trousers where it lands.</p>
+  </header>
+
+  <main class="lab">
+    <section class="viewport" id="viewport" aria-label="3D men's room simulation">
+      <div class="nogl" id="nogl" hidden>This browser can't start WebGL, so the 3D walk-through is off. The splash report below is still computed with the full physics model.</div>
+      <div class="hud tl">
+        <span class="chip" id="phase"><span class="dot idle" id="phase-dot"></span><span id="phase-text">Loading the men's room…</span><span class="t" id="phase-t"></span></span>
+      </div>
+      <div class="hud tr">
+        <div class="seg" role="group" aria-label="Camera">
+          <button type="button" id="cam-follow" aria-pressed="true">Follow</button>
+          <button type="button" id="cam-overview" aria-pressed="false">Overview</button>
+          <button type="button" id="cam-free" aria-pressed="false">Free</button>
+        </div>
+      </div>
+      <div class="hud bl">
+        <div class="meters">
+          <div class="meter"><div class="k">Urinal A · on you</div><div class="v"><span id="live-a">0.00</span><small>mL</small></div></div>
+          <div class="meter"><div class="k">Urinal B · on you</div><div class="v"><span id="live-b">0.00</span><small>mL</small></div></div>
+        </div>
+        <div class="timelapse" id="timelapse">Time-lapse: each void plays in a few seconds. Droplet flights play at true speed.</div>
+      </div>
+    </section>
+
+    <aside class="controls" aria-label="Simulation settings">
+      <h2>Test subject</h2>
+      <div class="field">
+        <div class="field-top"><label for="height">Height</label><output id="out-height" for="height"></output></div>
+        <input type="range" id="height" min="150" max="210" step="1" value="178">
+      </div>
+      <div class="field">
+        <div class="field-top"><label for="velocity">Stream velocity</label><output id="out-velocity" for="velocity"></output></div>
+        <input type="range" id="velocity" min="0.6" max="5" step="0.1" value="2.8">
+        <div class="presets" role="group" aria-label="Velocity presets">
+          <button type="button" class="pill" data-v="1.2">Dribble 1.2</button>
+          <button type="button" class="pill" data-v="2.8">Typical 2.8</button>
+          <button type="button" class="pill" data-v="4.2">Morning 4.2</button>
+        </div>
+      </div>
+      <details class="tech" id="tech">
+        <summary>Technique</summary>
+        <div class="inner">
+          <div class="field">
+            <div class="field-top"><label for="aim">Aim angle</label><output id="out-aim" for="aim"></output></div>
+            <input type="range" id="aim" min="-60" max="15" step="1" value="-20">
+          </div>
+          <div class="field">
+            <div class="field-top"><label for="standoff">Stand-off</label><output id="out-standoff" for="standoff"></output></div>
+            <input type="range" id="standoff" min="0" max="50" step="1" value="15">
+            <span class="hint">Gap between the urinal lip and your toes.</span>
+          </div>
+          <div class="field">
+            <div class="field-top"><label for="volume">Bladder volume</label><output id="out-volume" for="volume"></output></div>
+            <input type="range" id="volume" min="100" max="600" step="10" value="350">
+          </div>
+        </div>
+      </details>
+      <div class="actions">
+        <button type="button" class="btn primary" id="replay">Replay</button>
+        <button type="button" class="btn" id="slowmo" aria-pressed="false">Slow motion</button>
+        <label class="check"><input type="checkbox" id="cutaway" checked> Cutaway fixtures</label>
+      </div>
+    </aside>
+  </main>
+
+  <section class="report" aria-labelledby="report-h">
+    <div class="report-head">
+      <h2 id="report-h">Splash report</h2>
+      <span class="cap" id="report-params"></span>
+    </div>
+    <p class="verdict" id="verdict"></p>
+    <div class="cards" id="cards"></div>
+  </section>
+
+  <section class="notes" aria-labelledby="notes-h">
+    <h2 id="notes-h">How the physics works</h2>
+    <ol class="steps">
+      <li><h3>The stream is a projectile</h3><p>It leaves the nozzle at about half your height, at your chosen velocity and aim, and follows a ballistic arc. Over less than a metre, air drag on a 3.2 mm jet is negligible. Flow rate is <code>Q = v·πd²/4</code>, so 2.8 m/s delivers about 22 mL/s.</p></li>
+      <li><h3>It breaks into drops</h3><p>Surface tension makes any jet unstable (Rayleigh–Plateau). Disturbances grow at <code>ω = 0.34·√(σ/ρa³)</code>, so the stream turns into a train of 6 mm drops after about 64 ms, roughly 15–20 cm from you at typical speeds. A jet that lands before that point splashes far less.</p></li>
+      <li><h3>The impact decides the splash</h3><p>Drops splash when <code>K = We<sub>n</sub><sup>½</sup>·Re<sub>n</sub><sup>¼</sup></code> exceeds about 58, using only the velocity normal to the surface. A steep hit on a vertical wall puts nearly all of the speed into that normal component. A glancing hit below about 20–30° barely splashes, which is the idea behind low-angle fixtures.</p></li>
+      <li><h3>Every droplet is flown home</h3><p>The splashed volume is released as 1,500 parcels of sub-millimetre droplets per urinal, each with its own size, speed and direction. They fly under gravity and Reynolds-dependent drag until they hit you, the fixture, the partition, the wall or the floor.</p></li>
+    </ol>
+    <div class="refs">
+      <h3>Sources</h3>
+      <ul>
+        <li>Hurd, Truscott et al., BYU Splash Lab, <em>Urinal dynamics</em>, APS Division of Fluid Dynamics (2013): stream breakup distance and the case for standing closer and aiming at a glancing angle.</li>
+        <li>Pan, Hood et al., University of Waterloo (2022, <em>PNAS Nexus</em>): the critical-angle argument and the low-angle "Nautilus" fixture that urinal B is modelled on.</li>
+        <li>Mundo, Sommerfeld &amp; Tropea (1995), <em>Int. J. Multiphase Flow</em>: the K splashing threshold for drop–wall impacts.</li>
+        <li>Lord Rayleigh (1878), <em>On the instability of jets</em>; Drillis &amp; Contini (1966) for the body proportions.</li>
+      </ul>
+      <p class="caveat">The splash fraction and ejection-speed constants are hand-tuned to match published trends, not fitted to measurements. Use it to compare fixtures and technique, not to predict laundry bills.</p>
+    </div>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="physics.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
