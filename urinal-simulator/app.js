@@ -4,7 +4,8 @@
   const P = window.UrinalPhysics;
   const $ = id => document.getElementById(id);
   const reduceMotion = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
-  const N_DROPS = 1500;
+  const N_DROPS = 1500;   // parcels drawn in flight
+  const N_STATS = 6000;   // parcels behind the numbers and stains
 
   // ---------------------------------------------------------------- controls
   const el = { height: $('height'), velocity: $('velocity'), aim: $('aim'), standoff: $('standoff'), volume: $('volume') };
@@ -28,6 +29,7 @@
   }
   const fmtAim = a => a === 0 ? '0° level' : (a < 0 ? '−' : '+') + Math.abs(a) + '° ' + (a < 0 ? 'down' : 'up');
   function fmtMl(x) {
+    if (x > 0 && x < 0.005) return '<0.01';
     if (x >= 10) return x.toFixed(0);
     if (x >= 1) return x.toFixed(1);
     return x.toFixed(2);
@@ -62,7 +64,14 @@
 
   function compute() {
     const p = readParams();
-    results = P.URINALS.map((u, i) => P.simulate(u, p, { record: true, nDrops: N_DROPS, seed: 1000 + 77 * i }));
+    results = P.URINALS.map((u, i) => {
+      // A large unrecorded run gives stable totals (hand hits are rare
+      // events); a smaller recorded run supplies the droplet paths drawn in flight.
+      const stats = P.simulate(u, p, { nDrops: N_STATS, seed: 1000 + 77 * i });
+      const anim = P.simulate(u, p, { record: true, nDrops: N_DROPS, seed: 5000 + 77 * i });
+      const { paths, pathLen, spawn, endT, fate, size, stride, sampleDt } = anim;
+      return Object.assign(stats, { paths, pathLen, spawn, endT, fate, size, stride, sampleDt });
+    });
     renderReport();
     if (view) view.load(results);
   }
@@ -106,6 +115,32 @@
     return im.surface;
   }
 
+  // Hands (bare skin) versus pants (fly down to the hems).
+  const PANTS = ['fly', 'thighs', 'knees', 'shins'];
+  const dropletsIn = h => h.d ? h.ml / (Math.PI / 6 * h.d * h.d * h.d * 1e6) : 0;
+  function split(r) {
+    const out = { hands: r.zones.hands, pants: 0, shoes: r.zones.shoes, handsDrops: 0, pantsDrops: 0, shoesDrops: 0 };
+    for (const z of PANTS) out.pants += r.zones[z];
+    for (const h of r.hits) {
+      if (h.zone === 'hands') out.handsDrops += dropletsIn(h);
+      else if (PANTS.includes(h.zone)) out.pantsDrops += dropletsIn(h);
+      else if (h.zone === 'shoes') out.shoesDrops += dropletsIn(h);
+    }
+    return out;
+  }
+  const fmtCount = n => Math.round(n).toLocaleString();
+
+  function handsLine() {
+    const [sa, sb] = results.map(split);
+    if (sa.hands < 1e-6 && sb.hands < 1e-6) {
+      return ' <span class="hands-note">Your hands stay clean at both urinals: every droplet that reaches you lands below the belt.</span>';
+    }
+    const part = (r, sp) => sp.hands < 1e-6 ? 'none at ' + r.urinal.id
+      : '\u2248\u202f' + fmtCount(sp.handsDrops) + ' droplets (' + fmtMl(sp.hands) + ' mL) at ' + r.urinal.id;
+    return ' <span class="hands-note"><strong>Hands:</strong> ' + part(results[0], sa) + ', ' + part(results[1], sb) +
+      '. Pants take ' + fmtMl(sa.pants) + ' mL at A and ' + fmtMl(sb.pants) + ' mL at B.</span>';
+  }
+
   const ZONE_LABEL = Object.fromEntries(P.ZONES.map(z => [z.id, z.label]));
 
   function topZone(r) {
@@ -115,6 +150,10 @@
   }
 
   function verdictHTML() {
+    return verdictMain() + handsLine();
+  }
+
+  function verdictMain() {
     const [a, b] = results;
     const ok = r => r.status === 'bowl' || r.status === 'rim';
     if (!ok(a) && !ok(b)) {
@@ -188,11 +227,12 @@
       '<header class="card-head"><div class="tag">' + u.id + '</div><div><h3>' + u.name + '</h3><p>' + u.blurb + '</p></div></header>' +
       '<div class="score"><div><div class="big num">' + fmtMl(r.onPersonMl) + '<small>mL on you</small></div><div class="sub">' + sub +
       '</div></div><span class="grade ' + cls + '">' + label + '</span></div>' +
+      splitHTML(r) +
       '<div class="figs">' +
       '<figure class="fig"><canvas id="side-' + i + '" role="img" aria-label="Side view of the stream and splash at urinal ' + u.id + '"></canvas>' +
       '<figcaption>Side view. Yellow: the stream, solid until it breaks into drops. Red: droplet paths that end on you.</figcaption></figure>' +
       '<figure class="fig"><canvas id="body-' + i + '" role="img" aria-label="Front view of where droplets landed on the subject at urinal ' + u.id + '"></canvas>' +
-      '<figcaption>Each dot is one simulated droplet parcel.</figcaption></figure>' +
+      '<figcaption><span class="key k-h"></span>hands and wrists <span class="key k-p"></span>clothes and shoes</figcaption></figure>' +
       '</div>' +
       '<div class="zones" aria-label="Volume by body zone">' + zones + '</div>' +
       (r.direct ? '' : '<div><div class="fates" aria-hidden="true">' + fateBar + '</div><div class="legend">Where the splash went: ' + legend + '</div></div>') +
@@ -200,6 +240,25 @@
       '<div class="stance"><button type="button" class="btn" id="stance-' + i + '">Find my driest stance</button>' +
       '<span class="out" id="stance-out-' + i + '">Tries 135 combinations of aim and stand-off at this urinal.</span></div>' +
       '</article>';
+  }
+
+  function splitHTML(r) {
+    const sp = split(r);
+    const tile = (cls, k, ml, drops, note) =>
+      '<div class="tile ' + cls + (ml > 1e-6 ? ' hit' : '') + '"><span class="k">' + k + '</span>' +
+      '<span class="v num">' + (ml > 1e-6 ? fmtMl(ml) : '0') + '<small>mL</small></span>' +
+      '<span class="d">' + (ml > 1e-6 ? (drops ? '\u2248\u202f' + fmtCount(drops) + ' droplets' : 'direct hit') : note) + '</span></div>';
+    const total = sp.hands + sp.pants;
+    const ratio = total > 1e-6
+      ? '<div class="ratio" aria-label="Hands versus pants"><i class="h" style="width:' + (sp.hands / total * 100).toFixed(1) +
+        '%"></i><i class="p" style="width:' + (sp.pants / total * 100).toFixed(1) + '%"></i></div>' +
+        '<div class="ratio-cap"><span>Hands ' + (sp.hands / total * 100).toFixed(0) + '%</span><span>Pants ' + (sp.pants / total * 100).toFixed(0) + '%</span></div>'
+      : '';
+    return '<div class="split-wrap"><div class="split">' +
+      tile('hands', 'Hands &amp; wrists', sp.hands, sp.handsDrops, 'Clean') +
+      tile('pants', 'Pants', sp.pants, sp.pantsDrops, 'Dry') +
+      tile('shoes', 'Shoes', sp.shoes, sp.shoesDrops, 'Dry') +
+      '</div>' + ratio + '</div>';
   }
 
   function renderReport() {
@@ -273,7 +332,7 @@
     const T = b.torso;
     g.fillRect(X(zP + T.min[2]), Y(Math.min(T.max[1], yMax + 0.1)), (T.max[2] - T.min[2]) * sc, (Math.min(T.max[1], yMax + 0.1) - T.min[1]) * sc);
     g.beginPath();
-    g.arc(X(zP + b.hands.c[2]), Y(b.hands.c[1]), b.hands.r * sc, 0, Math.PI * 2);
+    g.ellipse(X(zP + b.hands.c[2]), Y(b.hands.c[1]), b.hands.ax[2] * sc, b.hands.ax[1] * sc, 0, 0, Math.PI * 2);
     g.fill();
     g.globalAlpha = 1;
 
@@ -389,6 +448,10 @@
       g.lineTo(X(sd * 0.04), Y(0.51 * H));
       g.stroke();
     }
+    // cupped hands
+    g.beginPath();
+    g.ellipse(X(b.hands.c[0]), Y(b.hands.c[1]), b.hands.ax[0] * sc, b.hands.ax[1] * sc, 0, 0, Math.PI * 2);
+    g.fill();
     // zone guides
     g.strokeStyle = t.faint;
     g.globalAlpha = 0.5;
@@ -404,12 +467,22 @@
     }
     // hits
     const rad = Math.max(1.6, Math.min(3, sc * 0.006));
-    g.fillStyle = t.accent;
-    g.strokeStyle = t.bad;
     g.lineWidth = 0.8;
+    g.fillStyle = t.accent;
+    g.strokeStyle = t.accentInk;
     for (const hit of r.hits) {
+      if (hit.zone === 'hands') continue;
       g.beginPath();
       g.arc(X(hit.x), Y(hit.y), rad, 0, Math.PI * 2);
+      g.fill(); g.stroke();
+    }
+    // hands last and larger, so skin hits read on top of the clothing
+    g.fillStyle = t.bad;
+    g.strokeStyle = t.surface;
+    for (const hit of r.hits) {
+      if (hit.zone !== 'hands') continue;
+      g.beginPath();
+      g.arc(X(hit.x), Y(hit.y), rad * 1.35, 0, Math.PI * 2);
       g.fill(); g.stroke();
     }
   }
@@ -709,6 +782,8 @@
     // ---------- person ----------
     const stainGeo = new T.SphereGeometry(1, 8, 6);
     const stainMat = new T.MeshStandardMaterial({ color: 0xe8b000, emissive: 0x4a3400, roughness: 0.35 });
+    // skin hits glow a little so they read against the hands
+    const handStainMat = new T.MeshStandardMaterial({ color: 0xffc21a, emissive: 0xb05a00, roughness: 0.2 });
     let person = null;
 
     function placeLimb(mesh, a, b) {
@@ -824,9 +899,10 @@
         parent = pp.arms[k].hand;
         p.sub(handPee(b, pp.arms[k].side));
       }
-      const m = new T.Mesh(stainGeo, stainMat);
+      const onSkin = hit.zone === 'hands';
+      const m = new T.Mesh(stainGeo, onSkin ? handStainMat : stainMat);
       m.position.copy(p);
-      m.scale.setScalar(radius);
+      m.scale.setScalar(onSkin ? Math.max(radius, 0.006) * 1.2 : radius);
       parent.add(m);
       pp.stains.push(m);
     }
@@ -929,7 +1005,7 @@
             });
           }
         } else {
-          hits = r.hits.map(h => ({ zone: h.zone, x: h.x, y: h.y, z: h.z, vt: h.tau * R.k + h.flight, ml: r.parcelMl }));
+          hits = r.hits.map(h => ({ zone: h.zone, x: h.x, y: h.y, z: h.z, vt: h.tau * R.k + h.flight, ml: h.ml }));
         }
         hits.sort((a, b) => a.vt - b.vt);
         R.hits = hits;
@@ -989,7 +1065,7 @@
       if (person) clearStains(person);
       floorCount = 0;
       floorStains.count = 0;
-      for (const R of runs) { R.hitPtr = 0; R.floorPtr = 0; R.liveMl = 0; }
+      for (const R of runs) { R.hitPtr = 0; R.floorPtr = 0; R.liveMl = 0; R.liveHands = 0; R.livePants = 0; }
       clock = 0;
       yaw = Math.PI * 0.75;
       if (jumpToEnd) {
@@ -1085,7 +1161,9 @@
         while (R.hitPtr < R.hits.length && R.hits[R.hitPtr].vt <= rel) {
           const h = R.hits[R.hitPtr++];
           R.liveMl += h.ml;
-          if (person.stains.length < 900) addStain(person, h, R.stainR);
+          if (h.zone === 'hands') R.liveHands += h.ml;
+          else if (PANTS.includes(h.zone)) R.livePants += h.ml;
+          if (h.zone === 'hands' || person.stains.length < 1400) addStain(person, h, R.stainR);
         }
         while (R.floorPtr < R.floor.length && R.floor[R.floorPtr].vt <= rel) {
           const f = R.floor[R.floorPtr++];
@@ -1106,6 +1184,7 @@
 
     const phaseText = $('phase-text'), phaseT = $('phase-t'), phaseDot = $('phase-dot');
     const liveEls = [$('live-a'), $('live-b')];
+    const liveHands = [$('live-a-h'), $('live-b-h')], livePants = [$('live-a-p'), $('live-b-p')];
     let lastHud = '';
     function hud(seg) {
       let text = '', tt = '';
@@ -1129,7 +1208,12 @@
         phaseT.textContent = tt;
         phaseDot.classList.toggle('idle', seg.kind !== 'pee');
       }
-      runs.forEach((R, i) => { liveEls[i].textContent = fmtMl(R.liveMl); });
+      runs.forEach((R, i) => {
+        liveEls[i].textContent = fmtMl(R.liveMl);
+        liveHands[i].textContent = fmtMl(R.liveHands);
+        livePants[i].textContent = fmtMl(R.livePants);
+        liveHands[i].parentElement.classList.toggle('hot', R.liveHands > 0);
+      });
     }
 
     const camPos = new T.Vector3(), camTgt = new T.Vector3();

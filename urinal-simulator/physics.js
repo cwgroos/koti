@@ -120,7 +120,15 @@
       hipY,
       nozzle: [0, 0.50 * H, -0.16],
       toeZ: -0.19,
-      hands: { c: [0, 0.50 * H + 0.01, -0.115], r: 0.045 * s },
+      // Both hands cupped in front of the fly (an ellipsoid), plus the wrists
+      // and lower forearms running back toward the elbows (capsules).
+      hands: { c: [0, 0.505 * H, -0.14], ax: [0.075 * s, 0.045 * s, 0.05] },
+      wrists: [1, -1].map(sd => {
+        const a = [sd * 0.035, 0.505 * H, -0.125];
+        const e = [sd * 0.175 * s, 0.625 * H, -0.035];
+        const f = 0.45;  // distal share of the forearm counted as wrist
+        return { a, b: [a[0] + (e[0] - a[0]) * f, a[1] + (e[1] - a[1]) * f, a[2] + (e[2] - a[2]) * f], r: 0.032 * s };
+      }),
       shoes: [
         { min: [0.05 * s, 0, -0.19], max: [0.15 * s, 0.075, 0.07] },
         { min: [-0.15 * s, 0, -0.19], max: [-0.05 * s, 0.075, 0.07] },
@@ -133,10 +141,16 @@
 
   // Returns the zone id a local point lies in, or null.
   function bodyHit(b, x, y, z) {
-    if (z > 0.2 || z < -0.24 || x > 0.32 || x < -0.32 || y > 0.84 * b.H) return null;
+    if (z > 0.2 || z < -0.25 || x > 0.32 || x < -0.32 || y > 0.84 * b.H) return null;
     const h = b.hands;
-    const hx = x - h.c[0], hy = y - h.c[1], hz = z - h.c[2];
-    if (hx * hx + hy * hy + hz * hz < h.r * h.r) return 'hands';
+    const hx = (x - h.c[0]) / h.ax[0], hy = (y - h.c[1]) / h.ax[1], hz = (z - h.c[2]) / h.ax[2];
+    if (hx * hx + hy * hy + hz * hz < 1) return 'hands';
+    for (const w of b.wrists) {
+      const dx = w.b[0] - w.a[0], dy = w.b[1] - w.a[1], dz = w.b[2] - w.a[2];
+      const t = Math.max(0, Math.min(1, ((x - w.a[0]) * dx + (y - w.a[1]) * dy + (z - w.a[2]) * dz) / (dx * dx + dy * dy + dz * dz)));
+      const px = x - w.a[0] - dx * t, py = y - w.a[1] - dy * t, pz = z - w.a[2] - dz * t;
+      if (px * px + py * py + pz * pz < w.r * w.r) return 'hands';
+    }
     for (const sh of b.shoes) {
       if (x > sh.min[0] && x < sh.max[0] && y > sh.min[1] && y < sh.max[1] && z > sh.min[2] && z < sh.max[2]) return 'shoes';
     }
@@ -310,7 +324,13 @@
     }
 
     const splashMl = sp.f * params.volumeMl;
-    const parcelMl = splashMl / nDrops;
+    // Every 4th parcel belongs to the prompt-splash fringe: tiny droplets
+    // thrown from the rim of the ejecta sheet faster than the impact itself
+    // (Thoroddsen 2002). They carry little volume, so each such parcel is
+    // weighted at PROMPT_W of a bulk parcel.
+    const PROMPT_EVERY = 4, PROMPT_W = 0.082;
+    const nPrompt = Math.ceil(nDrops / PROMPT_EVERY);
+    const parcelMl = splashMl / (nDrops - nPrompt + PROMPT_W * nPrompt);
     result.splashMl = splashMl;
     result.parcelMl = parcelMl;
 
@@ -340,15 +360,20 @@
       sizeArr = new Float32Array(nDrops);
     }
     const stride = (maxSteps / sampleEvery + 2) * 3;
+    let dropsOnPerson = 0;
     const ux = u.x;
     const part = PARTITION;
 
     for (let i = 0; i < nDrops; i++) {
       const tau = r() * duration;
-      const d = clamp(dMed * Math.exp(0.5 * gauss(r)), 0.0001, 0.003);
-      const beta = (12 + 58 * r()) * DEG;
+      const prompt = i % PROMPT_EVERY === 0;
+      const volMl = prompt ? parcelMl * PROMPT_W : parcelMl;
+      const d = prompt
+        ? clamp(0.35 * dMed * Math.exp(0.4 * gauss(r)), 0.00006, 0.001)
+        : clamp(dMed * Math.exp(0.5 * gauss(r)), 0.0001, 0.003);
+      const beta = (prompt ? 25 + 40 * r() : 12 + 58 * r()) * DEG;
       const phi = r() * 2 * Math.PI;
-      const ej = (regime === 'drops' ? un : speed * 0.6) * (0.25 + 0.95 * r() * r());
+      const ej = (regime === 'drops' ? un : speed * 0.6) * (prompt ? 1.3 + 1.4 * r() : 0.25 + 0.95 * r() * r());
       const carry = vt * (0.25 + 0.5 * r());
       const cb = Math.cos(beta), sb = Math.sin(beta), cp = Math.cos(phi), spp = Math.sin(phi);
       let vx = ej * cb * cp;
@@ -391,10 +416,11 @@
         }
         if (done) break;
       }
-      fates[fate] += parcelMl;
+      fates[fate] += volMl;
       if (zone) {
-        zones[zone] += parcelMl;
-        result.hits.push({ zone, x: hitLocal[0], y: hitLocal[1], z: hitLocal[2], tau, flight: (steps + 1) * dt, i, wx: px, wy: py, wz: pz });
+        zones[zone] += volMl;
+        dropsOnPerson += volMl / (Math.PI / 6 * d * d * d * 1e6);
+        result.hits.push({ zone, ml: volMl, d, x: hitLocal[0], y: hitLocal[1], z: hitLocal[2], tau, flight: (steps + 1) * dt, i, wx: px, wy: py, wz: pz });
       }
       if (record) {
         pathLen[i] = rec;
@@ -406,8 +432,7 @@
     }
     result.onPersonMl = fates.person;
     // Mean secondary-drop volume, to translate parcels into a droplet count.
-    const dropVolMl = Math.PI / 6 * Math.pow(dMed, 3) * Math.exp(4.5 * 0.25) * 1e6;
-    result.dropCount = Math.round(fates.person / dropVolMl);
+    result.dropCount = Math.round(dropsOnPerson);
     if (record) Object.assign(result, { paths, pathLen, spawn, endT, fate: fateArr, size: sizeArr, stride, sampleDt });
     return result;
   }

@@ -149,6 +149,8 @@
   .meter .k{font:500 10.5px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:#9fb3ac}
   .meter .v{font:800 24px/1.05 var(--display);letter-spacing:.01em;margin-top:4px}
   .meter .v small{font:500 12px var(--mono);color:#b9c8c3;margin-left:3px}
+  .meter .s{font:400 11px/1.3 var(--mono);color:#b9c8c3;margin-top:3px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .meter .s .sh.hot{color:#ff9a6e;font-weight:500}
   .timelapse{font:400 11px/1.3 var(--mono);color:#dbe5e2;background:rgba(14,22,20,.6);padding:5px 9px;border-radius:6px;max-width:260px}
   .nogl{position:absolute;inset:0;display:grid;place-items:center;padding:24px;text-align:center;color:#27352f;font-weight:500}
 
@@ -221,6 +223,27 @@
   .grade.good{background:var(--good-soft);border-color:transparent;color:var(--good)}
   .grade.warn{background:var(--accent-soft);border-color:transparent;color:var(--accent-ink)}
   .grade.bad{background:var(--bad-soft);border-color:transparent;color:var(--bad)}
+  .split-wrap{display:flex;flex-direction:column;gap:8px}
+  .split{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .tile{display:flex;flex-direction:column;gap:3px;padding:10px 12px;border-radius:10px;background:var(--surface-2);border:1px solid transparent;min-width:0}
+  .tile .k{font:500 10.5px/1.2 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .tile .v{font:800 28px/1 var(--display);letter-spacing:.01em}
+  .tile .v small{font:500 12px var(--mono);color:var(--muted);margin-left:3px;letter-spacing:0}
+  .tile .d{font-size:12px;color:var(--muted)}
+  .tile.hands{border-color:var(--line)}
+  .tile.hands.hit{background:var(--bad-soft);border-color:var(--bad)}
+  .tile.hands.hit .k,.tile.hands.hit .v{color:var(--bad)}
+  .tile.pants.hit .v,.tile.shoes.hit .v{color:var(--accent-ink)}
+  .ratio{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--surface-2)}
+  .ratio i{display:block;height:100%}
+  .ratio .h{background:var(--bad)}
+  .ratio .p{background:var(--accent)}
+  .ratio-cap{display:flex;justify-content:space-between;font:400 11.5px var(--mono);color:var(--muted)}
+  .key{display:inline-block;width:8px;height:8px;border-radius:50%;margin:0 4px 0 0;vertical-align:0}
+  .key.k-h{background:var(--bad)}
+  .key.k-p{background:var(--accent);margin-left:8px}
+  .hands-note{display:block;margin-top:6px;font-size:14.5px;color:var(--muted)}
+  .hands-note strong{color:var(--bad)}
   .figs{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:12px}
   .fig{display:flex;flex-direction:column;gap:6px;min-width:0}
   .fig canvas{width:100%;display:block;border-radius:8px;background:var(--surface-2)}
@@ -273,6 +296,8 @@
     .meter .v{font-size:20px}
     .timelapse{display:none}
     .score .big{font-size:46px}
+    .tile{padding:8px 9px}
+    .tile .v{font-size:22px}
   }
   @media (prefers-reduced-motion: reduce){
     *{scroll-behavior:auto!important}
@@ -313,8 +338,8 @@
       </div>
       <div class="hud bl">
         <div class="meters">
-          <div class="meter"><div class="k">Urinal A · on you</div><div class="v"><span id="live-a">0.00</span><small>mL</small></div></div>
-          <div class="meter"><div class="k">Urinal B · on you</div><div class="v"><span id="live-b">0.00</span><small>mL</small></div></div>
+          <div class="meter"><div class="k">Urinal A · on you</div><div class="v"><span id="live-a">0.00</span><small>mL</small></div><div class="s"><span class="sh">hands <span id="live-a-h">0.00</span></span> · pants <span id="live-a-p">0.00</span></div></div>
+          <div class="meter"><div class="k">Urinal B · on you</div><div class="v"><span id="live-b">0.00</span><small>mL</small></div><div class="s"><span class="sh">hands <span id="live-b-h">0.00</span></span> · pants <span id="live-b-p">0.00</span></div></div>
         </div>
         <div class="timelapse" id="timelapse">Time-lapse: each void plays in a few seconds. Droplet flights play at true speed.</div>
       </div>
@@ -340,11 +365,11 @@
         <div class="inner">
           <div class="field">
             <div class="field-top"><label for="aim">Aim angle</label><output id="out-aim" for="aim"></output></div>
-            <input type="range" id="aim" min="-60" max="15" step="1" value="-20">
+            <input type="range" id="aim" min="-60" max="15" step="1" value="-10">
           </div>
           <div class="field">
             <div class="field-top"><label for="standoff">Stand-off</label><output id="out-standoff" for="standoff"></output></div>
-            <input type="range" id="standoff" min="0" max="50" step="1" value="15">
+            <input type="range" id="standoff" min="0" max="50" step="1" value="5">
             <span class="hint">Gap between the urinal lip and your toes.</span>
           </div>
           <div class="field">
@@ -376,13 +401,14 @@
       <li><h3>The stream is a projectile</h3><p>It leaves the nozzle at about half your height, at your chosen velocity and aim, and follows a ballistic arc. Over less than a metre, air drag on a 3.2 mm jet is negligible. Flow rate is <code>Q = v·πd²/4</code>, so 2.8 m/s delivers about 22 mL/s.</p></li>
       <li><h3>It breaks into drops</h3><p>Surface tension makes any jet unstable (Rayleigh–Plateau). Disturbances grow at <code>ω = 0.34·√(σ/ρa³)</code>, so the stream turns into a train of 6 mm drops after about 64 ms, roughly 15–20 cm from you at typical speeds. A jet that lands before that point splashes far less.</p></li>
       <li><h3>The impact decides the splash</h3><p>Drops splash when <code>K = We<sub>n</sub><sup>½</sup>·Re<sub>n</sub><sup>¼</sup></code> exceeds about 58, using only the velocity normal to the surface. A steep hit on a vertical wall puts nearly all of the speed into that normal component. A glancing hit below about 20–30° barely splashes, which is the idea behind low-angle fixtures.</p></li>
-      <li><h3>Every droplet is flown home</h3><p>The splashed volume is released as 1,500 parcels of sub-millimetre droplets per urinal, each with its own size, speed and direction. They fly under gravity and Reynolds-dependent drag until they hit you, the fixture, the partition, the wall or the floor.</p></li>
+      <li><h3>Every droplet is flown home</h3><p>The splashed volume is released as 6,000 parcels of sub-millimetre droplets per urinal, each with its own size, speed and direction. They fly under gravity and Reynolds-dependent drag until they hit you, the fixture, the partition, the wall or the floor. One parcel in four belongs to the prompt-splash fringe: tiny droplets thrown faster than the impact itself. Only those are fast enough to climb 30 cm and reach your hands, which is why hands get hit only by steep, fast impacts.</p></li>
     </ol>
     <div class="refs">
       <h3>Sources</h3>
       <ul>
         <li>Hurd, Truscott et al., BYU Splash Lab, <em>Urinal dynamics</em>, APS Division of Fluid Dynamics (2013): stream breakup distance and the case for standing closer and aiming at a glancing angle.</li>
         <li>Pan, Hood et al., University of Waterloo (2022, <em>PNAS Nexus</em>): the critical-angle argument and the low-angle "Nautilus" fixture that urinal B is modelled on.</li>
+        <li>Thoroddsen (2002), <em>J. Fluid Mech.</em>: the ejecta sheet, whose droplets leave faster than the impacting drop.</li>
         <li>Mundo, Sommerfeld &amp; Tropea (1995), <em>Int. J. Multiphase Flow</em>: the K splashing threshold for drop–wall impacts.</li>
         <li>Lord Rayleigh (1878), <em>On the instability of jets</em>; Drillis &amp; Contini (1966) for the body proportions.</li>
       </ul>
