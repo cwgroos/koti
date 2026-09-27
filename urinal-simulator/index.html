@@ -141,7 +141,10 @@
     border:0;background:transparent;color:#c3d1cc;font:500 12px/1 var(--sans);padding:7px 11px;border-radius:999px;cursor:pointer;
   }
   .seg button[aria-pressed="true"]{background:#eef4f2;color:#13201c}
-  .meters{display:flex;gap:8px;flex-wrap:wrap}
+  .swatch{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px;vertical-align:0;box-shadow:0 0 0 1px rgba(255,255,255,.35)}
+  .divider{position:absolute;top:0;bottom:0;left:50%;width:2px;margin-left:-1px;background:rgba(14,22,20,.85);display:none;pointer-events:none}
+  .viewport.is-split .divider{display:block}
+  .viewport.is-split .timelapse{visibility:hidden}
   .meter{
     background:rgba(14,22,20,.78);color:#eef4f2;border-radius:10px;padding:8px 12px;min-width:132px;
     backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
@@ -320,7 +323,7 @@
         <h1>Urinal Simulator <span class="pm">Pro Max</span></h1>
       </div>
     </div>
-    <p class="lede">Set your height and stream velocity. A test subject walks in, uses both urinals, and a Monte-Carlo splash model traces every returning droplet to the exact spot on his trousers where it lands.</p>
+    <p class="lede">Set your height and stream velocity. Two identical test subjects walk in and use urinals A and B side by side, at the same moment. A Monte-Carlo splash model traces every returning droplet to the exact spot on their hands and trousers where it lands.</p>
   </header>
 
   <main class="lab">
@@ -337,12 +340,11 @@
         </div>
       </div>
       <div class="hud bl">
-        <div class="meters">
-          <div class="meter"><div class="k">Urinal A · on you</div><div class="v"><span id="live-a">0.00</span><small>mL</small></div><div class="s"><span class="sh">hands <span id="live-a-h">0.00</span></span> · pants <span id="live-a-p">0.00</span></div></div>
-          <div class="meter"><div class="k">Urinal B · on you</div><div class="v"><span id="live-b">0.00</span><small>mL</small></div><div class="s"><span class="sh">hands <span id="live-b-h">0.00</span></span> · pants <span id="live-b-p">0.00</span></div></div>
-        </div>
-        <div class="timelapse" id="timelapse">Time-lapse: each void plays in a few seconds. Droplet flights play at true speed.</div>
+          <div class="meter"><div class="k"><i class="swatch" style="background:#3d6c8a"></i>Urinal A · on him</div><div class="v"><span id="live-a">0.00</span><small>mL</small></div><div class="s"><span class="sh">hands <span id="live-a-h">0.00</span></span> · pants <span id="live-a-p">0.00</span></div></div>
+          <div class="timelapse" id="timelapse">Time-lapse: each void plays in a few seconds. Droplet flights play at true speed.</div>
+          <div class="meter"><div class="k"><i class="swatch" style="background:#5d7a3c"></i>Urinal B · on him</div><div class="v"><span id="live-b">0.00</span><small>mL</small></div><div class="s"><span class="sh">hands <span id="live-b-h">0.00</span></span> · pants <span id="live-b-p">0.00</span></div></div>
       </div>
+      <div class="divider" aria-hidden="true"></div>
     </section>
 
     <aside class="controls" aria-label="Simulation settings">

@@ -784,7 +784,6 @@
     const stainMat = new T.MeshStandardMaterial({ color: 0xe8b000, emissive: 0x4a3400, roughness: 0.35 });
     // skin hits glow a little so they read against the hands
     const handStainMat = new T.MeshStandardMaterial({ color: 0xffc21a, emissive: 0xb05a00, roughness: 0.2 });
-    let person = null;
 
     function placeLimb(mesh, a, b) {
       const d = new T.Vector3().subVectors(b, a);
@@ -794,10 +793,10 @@
       mesh.scale.set(1, Math.max(len, 1e-3), 1);
     }
 
-    function buildPerson(H) {
+    function buildPerson(H, shirtColor) {
       const b = P.bodyModel(H), s = b.s;
       const M = (c, r) => new T.MeshStandardMaterial({ color: c, roughness: r == null ? 0.8 : r });
-      const shirt = M(0x3d6c8a), pants = M(0xa69271), shoe = M(0x2a2420, 0.45), skin = M(0xd29f7d, 0.65), hair = M(0x3a2a20, 0.9);
+      const shirt = M(shirtColor), pants = M(0xa69271), shoe = M(0x2a2420, 0.45), skin = M(0xd29f7d, 0.65), hair = M(0x3a2a20, 0.9);
       const root = new T.Group();
       const hips = [];
       for (const L of b.legs) {
@@ -932,16 +931,17 @@
     for (let k = 0; k < MAX_DROPS; k++) drops.setMatrixAt(k, zeroM);
 
     let runs = [];
-    let timeline = [];
+    let phases = [];            // shared phases, for the HUD and camera
     let clock = 0, playing = false, speed = 1, camMode = 'follow';
-    let yaw = 0;
     let floorCount = 0;
+    const SHIRTS = [0x3d6c8a, 0x5d7a3c];   // subject A in blue, subject B in green
 
     function disposeRuns() {
       for (const R of runs) {
         if (R.tube) { scene.remove(R.tube); R.tube.geometry.dispose(); }
         if (R.beads) scene.remove(R.beads);
         if (R.puddle) { scene.remove(R.puddle); R.puddle.geometry.dispose(); }
+        if (R.person) scene.remove(R.person.root);
       }
       runs = [];
     }
@@ -956,12 +956,10 @@
 
     function load(res) {
       disposeRuns();
-      if (person) { scene.remove(person.root); }
-      person = buildPerson(res[0].params.H);
-      scene.add(person.root);
-
       runs = res.map((r, i) => {
         const R = { r, i };
+        R.person = buildPerson(r.params.H, SHIRTS[i]);
+        scene.add(R.person.root);
         R.T = Math.min(6.5, Math.max(3, r.duration * 0.28));
         R.k = R.T / r.duration;              // real void seconds -> visual seconds
         const path = r.stream.path;
@@ -1025,51 +1023,60 @@
       restart(reduceMotion);
     }
 
+    // Both subjects come in through the door, B first because he walks
+    // further, on separate lanes so they never cross. The earlier arrival
+    // waits, and both start at exactly the same moment.
     function buildTimeline() {
-      timeline = [];
-      let t = 0;
       const door = { x: -2.55, z: 3.2 };
-      const spots = runs.map(R => ({ x: R.r.urinal.x, z: R.r.zP }));
-      const walk = pts => {
-        for (let k = 0; k < pts.length - 1; k++) {
-          const a = pts[k], b = pts[k + 1];
-          const d = Math.hypot(b.x - a.x, b.z - a.z);
-          if (d < 1e-3) continue;
-          const dur = d / 1.15;
-          timeline.push({ kind: 'walk', t0: t, t1: t + dur, a, b, next: runs[timeline.filter(s => s.kind === 'pee').length] });
+      const pathLen = pts => pts.slice(1).reduce((d, b, k) => d + Math.hypot(b.x - pts[k].x, b.z - pts[k].z), 0);
+      const plans = runs.map((R, i) => {
+        const at = { x: R.r.urinal.x, z: R.r.zP };
+        const lane = at.z + (i === 0 ? 0.55 : 1.05);
+        const pts = [{ x: door.x, z: door.z - (i === 0 ? 0.25 : -0.1) }, { x: at.x, z: lane }, at];
+        return { R, at, pts, start: i === 0 ? 0.9 : 0 };
+      });
+      const arrive = Math.max(...plans.map(p => p.start + pathLen(p.pts) / 1.15 + 0.35));
+      const t0 = arrive + 0.7;
+      const T = Math.max(...runs.map(R => R.T));
+      for (const p of plans) {
+        const segs = [];
+        let t = p.start;
+        segs.push({ kind: 'away', t0: -Infinity, t1: t, at: p.pts[0] });
+        for (let k = 0; k < p.pts.length - 1; k++) {
+          const a = p.pts[k], b = p.pts[k + 1];
+          const dur = Math.hypot(b.x - a.x, b.z - a.z) / 1.15;
+          segs.push({ kind: 'walk', t0: t, t1: t + dur, a, b });
           t += dur;
         }
-        timeline.push({ kind: 'turn', t0: t, t1: t + 0.35, at: pts[pts.length - 1] });
-        t += 0.35;
-      };
-      walk([door, { x: spots[0].x, z: spots[0].z + 0.7 }, spots[0]]);
-      runs.forEach((R, i) => {
-        const at = spots[i];
-        timeline.push({ kind: 'prep', t0: t, t1: t + 0.7, R, at });
-        t += 0.7;
-        R.t0 = t;
-        timeline.push({ kind: 'pee', t0: t, t1: t + R.T, R, at });
-        t += R.T;
-        timeline.push({ kind: 'post', t0: t, t1: t + 1.35, R, at });
-        t += 1.35;
-        if (i < runs.length - 1) {
-          const nx = spots[i + 1];
-          const lane = Math.max(at.z, nx.z) + 0.4;
-          walk([at, { x: at.x, z: lane }, { x: nx.x, z: lane }, nx]);
-        }
-      });
-      timeline.push({ kind: 'done', t0: t, t1: Infinity, at: spots[spots.length - 1] });
+        segs.push({ kind: 'stand', t0: t, t1: t0 - 0.7, at: p.at });
+        segs.push({ kind: 'prep', t0: t0 - 0.7, t1: t0, at: p.at });
+        segs.push({ kind: 'pee', t0, t1: t0 + p.R.T, at: p.at });
+        segs.push({ kind: 'post', t0: t0 + p.R.T, t1: t0 + T + 1.35, at: p.at });
+        segs.push({ kind: 'done', t0: t0 + T + 1.35, t1: Infinity, at: p.at });
+        p.R.segs = segs;
+        p.R.t0 = t0;
+      }
+      phases = [
+        { kind: 'walk', t0: -Infinity, t1: t0 - 0.7 },
+        { kind: 'prep', t0: t0 - 0.7, t1: t0 },
+        { kind: 'pee', t0, t1: t0 + T, T, R: runs[0] },
+        { kind: 'post', t0: t0 + T, t1: t0 + T + 1.35 },
+        { kind: 'done', t0: t0 + T + 1.35, t1: Infinity },
+      ];
     }
 
     function restart(jumpToEnd) {
-      if (person) clearStains(person);
       floorCount = 0;
       floorStains.count = 0;
-      for (const R of runs) { R.hitPtr = 0; R.floorPtr = 0; R.liveMl = 0; R.liveHands = 0; R.livePants = 0; }
+      for (const R of runs) {
+        clearStains(R.person);
+        R.hitPtr = 0; R.floorPtr = 0; R.liveMl = 0; R.liveHands = 0; R.livePants = 0;
+        R.yaw = Math.PI * 0.75;
+      }
       clock = 0;
-      yaw = Math.PI * 0.75;
+      splitOn = false;
       if (jumpToEnd) {
-        clock = timeline[timeline.length - 1].t0 + 0.01;
+        clock = phases[phases.length - 1].t0 + 0.01;
         playing = false;
       } else {
         playing = true;
@@ -1078,16 +1085,18 @@
     }
 
     const tmpV = new T.Vector3();
-    function segAt(t) {
-      for (const s of timeline) if (t >= s.t0 && t < s.t1) return s;
-      return timeline[timeline.length - 1];
+    function segIn(list, t) {
+      for (const s of list) if (t >= s.t0 && t < s.t1) return s;
+      return list[list.length - 1];
     }
+    const phaseAt = t => segIn(phases, t);
     const angleDiff = (a, b) => { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; };
 
-    function update(dt, snap) {
-      if (!person || !timeline.length) return;
-      const seg = segAt(clock);
+    function moveSubject(R, dt, snap) {
+      const seg = segIn(R.segs, clock);
+      const pp = R.person;
       let pos, walkAmt = 0, peeK = 0, targetYaw = 0;
+      pp.root.visible = seg.kind !== 'away';
       if (seg.kind === 'walk') {
         const f = (clock - seg.t0) / (seg.t1 - seg.t0);
         pos = { x: seg.a.x + (seg.b.x - seg.a.x) * f, z: seg.a.z + (seg.b.z - seg.a.z) * f };
@@ -1095,15 +1104,22 @@
         walkAmt = 1;
       } else {
         pos = seg.at;
+        if (seg.kind === 'away') targetYaw = R.yaw;
         if (seg.kind === 'prep') peeK = (clock - seg.t0) / (seg.t1 - seg.t0);
         else if (seg.kind === 'pee') peeK = 1;
         else if (seg.kind === 'post') peeK = Math.max(0, 1 - (clock - seg.t0) / 0.7);
       }
       peeK = peeK * peeK * (3 - 2 * peeK);
-      yaw = snap ? targetYaw : yaw + angleDiff(yaw, targetYaw) * Math.min(1, dt * 9);
-      person.root.position.set(pos.x, walkAmt ? 0.012 * Math.abs(Math.sin(clock * 5.6)) : 0, pos.z);
-      person.root.rotation.y = yaw;
-      pose(person, clock * 5.6, walkAmt, peeK);
+      R.yaw = snap ? targetYaw : R.yaw + angleDiff(R.yaw, targetYaw) * Math.min(1, dt * 9);
+      const phase = clock * 5.6 + R.i * 1.9;   // out of step with each other
+      pp.root.position.set(pos.x, walkAmt ? 0.012 * Math.abs(Math.sin(phase)) : 0, pos.z);
+      pp.root.rotation.y = R.yaw;
+      pose(pp, phase, walkAmt, peeK);
+    }
+
+    function update(dt, snap) {
+      if (!runs.length || !phases.length) return;
+      for (const R of runs) moveSubject(R, dt, snap);
 
       // fluids
       let di = 0;
@@ -1163,7 +1179,7 @@
           R.liveMl += h.ml;
           if (h.zone === 'hands') R.liveHands += h.ml;
           else if (PANTS.includes(h.zone)) R.livePants += h.ml;
-          if (h.zone === 'hands' || person.stains.length < 1400) addStain(person, h, R.stainR);
+          if (h.zone === 'hands' || R.person.stains.length < 1400) addStain(R.person, h, R.stainR);
         }
         while (R.floorPtr < R.floor.length && R.floor[R.floorPtr].vt <= rel) {
           const f = R.floor[R.floorPtr++];
@@ -1178,35 +1194,35 @@
       floorStains.count = floorCount;
       floorStains.instanceMatrix.needsUpdate = true;
 
-      hud(seg);
-      camera_(seg, dt, snap);
+      const ph = phaseAt(clock);
+      hud(ph);
+      camera_(ph, dt, snap);
     }
 
     const phaseText = $('phase-text'), phaseT = $('phase-t'), phaseDot = $('phase-dot');
     const liveEls = [$('live-a'), $('live-b')];
     const liveHands = [$('live-a-h'), $('live-b-h')], livePants = [$('live-a-p'), $('live-b-p')];
     let lastHud = '';
-    function hud(seg) {
+    function hud(ph) {
       let text = '', tt = '';
-      switch (seg.kind) {
-        case 'walk': text = 'Walking to urinal ' + (seg.next ? seg.next.r.urinal.id : ''); break;
-        case 'turn': text = 'Stepping up'; break;
-        case 'prep': text = 'Unzipping at urinal ' + seg.R.r.urinal.id; break;
+      switch (ph.kind) {
+        case 'walk': text = 'Two subjects walking in'; break;
+        case 'prep': text = 'Unzipping at A and B'; break;
         case 'pee': {
-          const rel = clock - seg.R.t0;
-          text = 'Urinal ' + seg.R.r.urinal.id;
-          tt = (rel / seg.R.k).toFixed(1) + ' / ' + seg.R.r.duration.toFixed(1) + ' s';
+          const R = ph.R;
+          text = 'Both urinals, same moment';
+          tt = ((clock - R.t0) / R.k).toFixed(1) + ' / ' + R.r.duration.toFixed(1) + ' s';
           break;
         }
-        case 'post': text = 'Zipping up at urinal ' + seg.R.r.urinal.id; break;
+        case 'post': text = 'Zipping up'; break;
         default: text = playing ? 'Done' : 'Done. Press Replay to watch again';
       }
-      const key = text + tt + seg.kind;
+      const key = text + tt + ph.kind;
       if (key !== lastHud) {
         lastHud = key;
         phaseText.textContent = text;
         phaseT.textContent = tt;
-        phaseDot.classList.toggle('idle', seg.kind !== 'pee');
+        phaseDot.classList.toggle('idle', ph.kind !== 'pee');
       }
       runs.forEach((R, i) => {
         liveEls[i].textContent = fmtMl(R.liveMl);
@@ -1216,20 +1232,37 @@
       });
     }
 
+    // Split screen: while the subjects are at the urinals, the view divides
+    // into A (seen from the left) and B (seen from the right).
+    const splitCams = [0, 1].map(() => ({ cam: new T.PerspectiveCamera(50, 0.8, 0.03, 40), pos: new T.Vector3(), tgt: new T.Vector3() }));
+    let splitOn = false;
+    const wantsSplit = ph => camMode === 'follow' && ph.kind !== 'walk';
+
     const camPos = new T.Vector3(), camTgt = new T.Vector3();
-    function camera_(seg, dt, snap) {
-      if (camMode === 'free' || !controls) return;
-      let pos = OVERVIEW.pos, tgt = OVERVIEW.tgt;
-      if (camMode === 'follow' && seg.R && (seg.kind === 'prep' || seg.kind === 'pee' || seg.kind === 'post')) {
-        const r = seg.R.r, u = r.urinal;
-        const sd = u.x < 0 ? -1 : 1;
-        // front-quarter view from the open side, so the camera never passes through the subject
-        pos = camPos.set(u.x + sd * 1.2, 1.02, r.zP + 0.78);
-        tgt = camTgt.set(u.x, 0.62, r.zP * 0.5 + 0.05);
-      }
+    function camera_(ph, dt, snap) {
       const k = snap ? 1 : 1 - Math.exp(-dt * 2.6);
-      camera.position.lerp(pos, k);
-      controls.target.lerp(tgt, k);
+      const split = wantsSplit(ph) && runs.length === 2;
+      if (split && !splitOn) {
+        // start both halves from wherever the main camera is, then glide in
+        for (const sc of splitCams) { sc.pos.copy(camera.position); sc.tgt.copy(controls ? controls.target : OVERVIEW.tgt); }
+      }
+      splitOn = split;
+      host.classList.toggle('is-split', split);
+      if (split) {
+        runs.forEach((R, i) => {
+          const u = R.r.urinal, sd = u.x < 0 ? -1 : 1;
+          const sc = splitCams[i];
+          // nearly side-on from the open side of each fixture
+          sc.pos.lerp(camPos.set(u.x + sd * 1.55, 0.98, R.r.zP + 0.6), k);
+          sc.tgt.lerp(camTgt.set(u.x, 0.58, R.r.zP * 0.5 + 0.02), k);
+          sc.cam.position.copy(sc.pos);
+          sc.cam.lookAt(sc.tgt);
+        });
+        return;
+      }
+      if (camMode === 'free' || !controls) return;
+      camera.position.lerp(OVERVIEW.pos, k);
+      controls.target.lerp(OVERVIEW.tgt, k);
     }
 
     function setCam(mode) {
@@ -1252,13 +1285,34 @@
         const dt = rawDt * speed;
         clock += dt;
         update(dt, false);
-        if (segAt(clock).kind === 'done') playing = false;
-      } else if (camMode !== 'free') {
-        camera_(segAt(clock), rawDt, false);
+        if (phaseAt(clock).kind === 'done') playing = false;
+      } else {
+        camera_(phaseAt(clock), rawDt, false);
       }
-      if (controls) controls.update();
-      renderer.render(scene, camera);
+      if (controls && !splitOn) controls.update();
+      draw();
     }
+    function draw() {
+      const w = host.clientWidth, h = host.clientHeight;
+      if (!splitOn) {
+        renderer.setViewport(0, 0, w, h);
+        renderer.render(scene, camera);
+        return;
+      }
+      const half = Math.floor(w / 2);
+      renderer.setScissorTest(true);
+      splitCams.forEach((sc, i) => {
+        const x = i * half, wd = i ? w - half : half;
+        sc.cam.aspect = wd / h;
+        sc.cam.fov = wd / h < 0.7 ? 62 : 50;
+        sc.cam.updateProjectionMatrix();
+        renderer.setViewport(x, 0, wd, h);
+        renderer.setScissor(x, 0, wd, h);
+        renderer.render(scene, sc.cam);
+      });
+      renderer.setScissorTest(false);
+    }
+
     function resize() {
       const w = host.clientWidth, h = host.clientHeight;
       if (!w || !h) return;
