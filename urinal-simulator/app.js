@@ -698,6 +698,10 @@
       return tex;
     }
     const signs = [];
+    const cakes = [];
+    const cakeMat = new T.MeshStandardMaterial({ color: 0x4fa3c7, roughness: 0.8 });
+    const cakeGeoA = new T.CylinderGeometry(0.04, 0.042, 0.016, 20);
+    const cakeGeoB = new T.CylinderGeometry(0.034, 0.036, 0.016, 20);
     P.URINALS.forEach(u => {
       const grp = new T.Group();
       grp.position.x = u.x;
@@ -734,11 +738,19 @@
       handle.rotation.z = Math.PI / 2;
       handle.position.set(0.07, u.topY + 0.3, 0.09);
       grp.add(handle);
+      // urinal cake: flat in A's bowl; in B it rests on the ramp below the lip,
+      // since B's drain is hidden under the hood from every camera
+      const cake = new T.Mesh(u.id === 'A' ? cakeGeoA : cakeGeoB, cakeMat);
       if (u.id === 'A') {
-        const cake = new T.Mesh(new T.CylinderGeometry(0.04, 0.042, 0.016, 20), new T.MeshStandardMaterial({ color: 0x4fa3c7, roughness: 0.8 }));
         cake.position.set(-0.07, 0.578, 0.21);
-        grp.add(cake);
       } else {
+        cake.position.set(0, 0.557, 0.345);
+        cake.rotation.x = -0.5;
+      }
+      cake.castShadow = true;
+      grp.add(cake);
+      cakes.push(cake);
+      if (u.id === 'B') {
         // the etched fly on the ramp
         const fly = new T.Mesh(new T.CircleGeometry(0.011, 12), new T.MeshBasicMaterial({ color: 0x222222 }));
         fly.scale.set(1, 1.7, 1);
@@ -769,6 +781,10 @@
     const edge = new T.Mesh(new T.BoxGeometry(0.028, PT.y1 - PT.y0, 0.02), chrome);
     edge.position.set(PT.x, (PT.y0 + PT.y1) / 2, PT.zMax);
     scene.add(edge);
+
+    function setCakes(on) {
+      cakes.forEach(c => { c.visible = on; });
+    }
 
     function setCutaway(on) {
       flangeMats.forEach(m => {
@@ -1332,6 +1348,7 @@
       setSlow(on) { speed = on ? 0.25 : 1; },
       setCam,
       setCutaway,
+      setCakes,
     };
   }
 
@@ -1347,6 +1364,7 @@
     $('phase-text').textContent = '3D view unavailable';
   } else {
     view.setCutaway($('cutaway').checked);
+    view.setCakes($('cakes').checked);
   }
   compute();
 
@@ -1357,5 +1375,6 @@
     if (view) view.setSlow(on);
   });
   $('cutaway').addEventListener('change', e => view && view.setCutaway(e.target.checked));
+  $('cakes').addEventListener('change', e => view && view.setCakes(e.target.checked));
   ['follow', 'overview', 'free'].forEach(m => $('cam-' + m).addEventListener('click', () => view && view.setCam(m)));
 })();
