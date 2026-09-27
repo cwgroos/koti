@@ -35,18 +35,20 @@
     Kc: 57.7,           // Mundo et al. (1995) splash threshold
   };
 
-  // Profiles are side sections (z, y) of each fixture, traced from the top
-  // where it meets the wall, through the bowl, over the lip and back down the
-  // outside to the wall. `interior` is the half-open range of segment indices
-  // that count as "inside the bowl".
-  const URINALS = [
-    {
-      id: 'A',
+  // Fixture templates. Profiles are side sections (z, y), traced from the top
+  // where the fixture meets the wall, through the bowl, over the lip and back
+  // down the outside to the wall. `interior` is the half-open range of segment
+  // indices that count as "inside the bowl". `rimY` is the lip height the
+  // profile is drawn at; makeUrinal() slides the whole fixture up or down the
+  // wall to any other rim height. `cakeZ` is where a urinal cake sits.
+  const TEMPLATES = {
+    classic: {
+      type: 'classic',
       name: 'Classic Wall-Hung',
-      blurb: 'The standard 24-inch-rim fixture: a near-vertical back wall and a shallow bowl.',
-      x: -0.45,
+      blurb: 'A near-vertical back wall and a shallow bowl.',
       width: 0.38,
       interior: [2, 11],
+      rimY: 0.625,
       profile: [
         [0, 1.05], [0.15, 1.05], [0.15, 1.00], [0.075, 0.975], [0.07, 0.90],
         [0.07, 0.74], [0.085, 0.67], [0.13, 0.605], [0.20, 0.57], [0.27, 0.568],
@@ -54,14 +56,15 @@
         [0.15, 0.43], [0, 0.40],
       ],
       drain: [0.23, 0.567],
+      cakeZ: 0.235,
     },
-    {
-      id: 'B',
+    nautilus: {
+      type: 'nautilus',
       name: 'Nautilus Low-Angle',
       blurb: 'A deep fixture whose floor curves like a falling stream, so drops arrive at a glancing angle.',
-      x: 0.45,
       width: 0.38,
       interior: [2, 13],
+      rimY: 0.61,
       profile: [
         [0, 1.12], [0.24, 1.12], [0.27, 1.09], [0.24, 1.06], [0.10, 1.02],
         [0.05, 0.95], [0.045, 0.60], [0.06, 0.40], [0.09, 0.34], [0.13, 0.375],
@@ -69,14 +72,60 @@
         [0.505, 0.59], [0.46, 0.50], [0.30, 0.36], [0.12, 0.26], [0, 0.25],
       ],
       drain: [0.09, 0.34],
+      // B's real drain is hidden under its hood, so the cake rests on the ramp
+      cakeZ: 0.345,
     },
-  ];
-  for (const u of URINALS) {
+  };
+  const SLOTS = [{ id: 'A', x: -0.45 }, { id: 'B', x: 0.45 }];
+  const RIM_MIN = 0.38, RIM_MAX = 0.75;
+  const CAKE = { r: 0.04, h: 0.016 };
+
+  // A fixture of `type` in stall `slot`, with its rim `rim` metres off the
+  // floor, optionally holding a urinal cake.
+  function makeUrinal(type, slot, rim, cake) {
+    const T = TEMPLATES[type];
+    const S = SLOTS.find(s => s.id === slot);
+    const dy = clamp(rim, RIM_MIN, RIM_MAX) - T.rimY;
+    const u = {
+      id: S.id, x: S.x, type: T.type, name: T.name, blurb: T.blurb, width: T.width, interior: T.interior,
+      rim: T.rimY + dy,
+      profile: T.profile.map(([z, y]) => [z, y + dy]),
+      drain: [T.drain[0], T.drain[1] + dy],
+    };
     u.lipZ = Math.max(...u.profile.map(p => p[0]));
     u.topY = Math.max(...u.profile.map(p => p[1]));
     u.botY = Math.min(...u.profile.map(p => p[1]));
+    if (cake) u.cake = placeCake(u, T.cakeZ);
+    return u;
   }
 
+  // The cake is a puck lying on the bowl surface at depth zc. In section it is
+  // a rectangle standing on the surface: two sides and a top, all collidable.
+  function placeCake(u, zc) {
+    const P = u.profile;
+    for (let i = u.interior[0]; i < u.interior[1]; i++) {
+      const a = P[i], b = P[i + 1];
+      if ((zc - a[0]) * (zc - b[0]) > 0) continue;
+      const f = (zc - a[0]) / (b[0] - a[0]);
+      const base = [zc, a[1] + (b[1] - a[1]) * f];
+      let tz = b[0] - a[0], ty = b[1] - a[1];
+      const l = Math.hypot(tz, ty);
+      tz /= l; ty /= l;
+      let nz = -ty, ny = tz;
+      if (ny < 0) { nz = -nz; ny = -ny; }
+      const { r, h } = CAKE, e = 0.002;
+      const pt = (s, k) => [base[0] + s * r * tz + k * nz, base[1] + s * r * ty + k * ny];
+      return {
+        r, h, base, t: [tz, ty], n: [nz, ny],
+        pts: [pt(-1, -e), pt(-1, h), pt(1, h), pt(1, -e)],
+        center: [base[0] + nz * h / 2, base[1] + ny * h / 2],
+      };
+    }
+    return null;
+  }
+
+  // The default line-up: the same classic fixture at a standard 24 in rim
+  // (A) and an ADA-accessible 17 in rim (B), both with cakes.
   const PARTITION = { x: 0, zMax: 0.58, y0: 0.30, y1: 1.60 };
 
   const ZONES = [
@@ -107,6 +156,8 @@
   const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
   const smoothstep = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); };
   const DEG = Math.PI / 180;
+
+  const URINALS = [makeUrinal('classic', 'A', 0.61, true), makeUrinal('classic', 'B', 0.43, true)];
 
   // ---------- the person ----------
   // Local frame: origin on the floor between the ankles, facing -z (toward
@@ -190,13 +241,23 @@
   }
 
   // First fixture segment crossed by a move, or null.
-  function hitProfile(u, z0, y0, z1, y1) {
+  // First fixture (or cake) segment crossed by a move, or null. `lx` is the
+  // lateral offset from the fixture centre; the cake only spans |lx| < r.
+  function hitProfile(u, z0, y0, z1, y1, lx) {
     if (Math.min(z0, z1) > u.lipZ + 0.01 || Math.max(y0, y1) < u.botY - 0.01 || Math.min(y0, y1) > u.topY + 0.01) return null;
     const P = u.profile;
     let best = null;
     for (let i = 0; i < P.length - 1; i++) {
       const t = crossT(z0, y0, z1, y1, P[i][0], P[i][1], P[i + 1][0], P[i + 1][1]);
-      if (t >= 0 && (!best || t < best.t)) best = { t, seg: i };
+      if (t >= 0 && (!best || t < best.t)) best = { t, seg: i, a: P[i], b: P[i + 1] };
+    }
+    const ck = u.cake;
+    if (ck && !(Math.abs(lx || 0) > ck.r)) {
+      const Q = ck.pts;
+      for (let i = 0; i < Q.length - 1; i++) {
+        const t = crossT(z0, y0, z1, y1, Q[i][0], Q[i][1], Q[i + 1][0], Q[i + 1][1]);
+        if (t >= 0 && (!best || t < best.t)) best = { t, seg: -1, cake: true, a: Q[i], b: Q[i + 1] };
+      }
     }
     return best;
   }
@@ -231,7 +292,7 @@
       const nvy = vy - C.g * dt;
       let hit = null;
       const hp = hitProfile(u, z, y, nz, ny);
-      if (hp) hit = { t: hp.t, kind: 'fixture', seg: hp.seg };
+      if (hp) hit = { t: hp.t, kind: 'fixture', seg: hp.seg, cake: hp.cake, a: hp.a, b: hp.b };
       const tw = crossT(z, y, nz, ny, 0, 0, 0, 4);
       if (tw >= 0 && (!hit || tw < hit.t)) hit = { t: tw, kind: 'wall' };
       const tf = crossT(z, y, nz, ny, -1, 0, 6, 0);
@@ -245,9 +306,8 @@
         path.push([x, iy, iz, t]);
         let normal, surface = hit.kind;
         if (hit.kind === 'fixture') {
-          const P = u.profile;
-          normal = segNormal(P[hit.seg][0], P[hit.seg][1], P[hit.seg + 1][0], P[hit.seg + 1][1], vz, ivy);
-          surface = (hit.seg >= u.interior[0] && hit.seg < u.interior[1]) ? 'bowl' : 'rim';
+          normal = segNormal(hit.a[0], hit.a[1], hit.b[0], hit.b[1], vz, ivy);
+          surface = hit.cake ? 'cake' : (hit.seg >= u.interior[0] && hit.seg < u.interior[1]) ? 'bowl' : 'rim';
         } else if (hit.kind === 'wall') normal = [1, 0];
         else normal = [0, 1];
         if (Lb === null && t >= tb) { Lb = s; breakIdx = path.length - 1; }
@@ -266,20 +326,25 @@
   }
 
   // ---------- splash model ----------
-  function splashModel(regime, speed, un, alphaDeg) {
+  // `rough` marks a rough, dry-ish target such as a urinal cake. Roughness
+  // lowers the splash threshold (Range & Feuillebois 1998) and breaks a
+  // jet's sheet up sooner, so both regimes splash more.
+  function splashModel(regime, speed, un, alphaDeg, rough) {
     const d = C.jetD;
     if (regime === 'jet') {
       const We = C.rho * speed * speed * d / C.sigma;
       const Re = C.rho * speed * d / C.mu;
-      const f = 0.05 * smoothstep(20, 75, alphaDeg) * (1 - Math.exp(-We / 400));
-      return { f, We, Re, K: Math.sqrt(We) * Math.pow(Re, 0.25), D: d, splashes: f > 0.002 };
+      const f = (rough ? 0.08 : 0.05) * smoothstep(rough ? 10 : 20, 75, alphaDeg) * (1 - Math.exp(-We / 400));
+      return { f, We, Re, K: Math.sqrt(We) * Math.pow(Re, 0.25), D: d, Kc: C.Kc, splashes: f > 0.002 };
     }
     const D = 1.89 * d;
     const We = C.rho * un * un * D / C.sigma;
     const Re = C.rho * un * D / C.mu;
     const K = Math.sqrt(We) * Math.pow(Re, 0.25);
-    const f = K < C.Kc ? 0.004 * (K / C.Kc) : 0.02 + 0.20 * (1 - Math.exp(-(K - C.Kc) / 200));
-    return { f, We, Re, K, D, splashes: K >= C.Kc };
+    const Kc = rough ? 0.65 * C.Kc : C.Kc;
+    const fMax = rough ? 0.26 : 0.20;
+    const f = K < Kc ? 0.004 * (K / Kc) : 0.02 + fMax * (1 - Math.exp(-(K - Kc) / 200));
+    return { f, We, Re, K, D, Kc, splashes: K >= Kc };
   }
 
   // ---------- full run at one fixture ----------
@@ -304,7 +369,7 @@
     const un = Math.abs(im.vy * im.ny + im.vz * im.nz);
     const alphaDeg = Math.asin(clamp(un / speed, 0, 1)) / DEG;
     const regime = stream.t < stream.tb ? 'jet' : 'drops';
-    const sp = splashModel(regime, speed, un, alphaDeg);
+    const sp = splashModel(regime, speed, un, alphaDeg, im.surface === 'cake');
 
     const result = {
       urinal: u, params, body: b, zP, Q, duration, stream, regime, speed, un, alphaDeg,
@@ -402,7 +467,7 @@
         const zn = bodyHit(b, lx, nyy, lz);
         if (zn) { fate = 'person'; zone = zn; hitLocal = [lx, nyy, lz]; done = true; }
         if (!done && Math.abs(nx - ux) < u.width / 2) {
-          const hp = hitProfile(u, pz, py, nzz, nyy);
+          const hp = hitProfile(u, pz, py, nzz, nyy, nx - ux);
           if (hp) { fate = 'fixture'; done = true; }
         }
         if (!done && (px - part.x) * (nx - part.x) <= 0 && nzz < part.zMax && nyy > part.y0 && nyy < part.y1) { fate = 'partition'; done = true; }
@@ -447,7 +512,7 @@
     for (const aim of aims) {
       for (const standoff of offs) {
         const res = simulate(u, Object.assign({}, params, { aim, standoff }), { nDrops: 300, seed: 99 });
-        if (res.status !== 'bowl') continue;
+        if (res.status !== 'bowl' && res.status !== 'cake') continue;
         const score = res.onPersonMl + 0.001 * res.splashMl;
         if (!best || score < best.score - 1e-9 || (Math.abs(score - best.score) < 1e-9 && standoff < best.standoff)) {
           best = { aim, standoff, score };
@@ -458,7 +523,7 @@
     return best;
   }
 
-  const api = { C, URINALS, PARTITION, ZONES, bodyModel, bodyHit, personZ, breakupTime, traceStream, splashModel, simulate, bestStance };
+  const api = { C, URINALS, TEMPLATES, SLOTS, RIM_MIN, RIM_MAX, CAKE, makeUrinal, PARTITION, ZONES, bodyModel, bodyHit, personZ, breakupTime, traceStream, splashModel, simulate, bestStance };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.UrinalPhysics = api;
 })(typeof window !== 'undefined' ? window : globalThis);
