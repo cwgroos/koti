@@ -8,8 +8,25 @@
   const N_STATS = 6000;   // parcels behind the numbers and stains
 
   // ---------------------------------------------------------------- controls
-  const el = { height: $('height'), velocity: $('velocity'), aim: $('aim'), standoff: $('standoff'), volume: $('volume') };
-  const out = { height: $('out-height'), velocity: $('out-velocity'), aim: $('out-aim'), standoff: $('out-standoff'), volume: $('out-volume') };
+  const el = { height: $('height'), velocity: $('velocity'), aim: $('aim'), standoff: $('standoff'), volume: $('volume'), rimA: $('rim-a'), rimB: $('rim-b') };
+  const out = { height: $('out-height'), velocity: $('out-velocity'), aim: $('out-aim'), standoff: $('out-standoff'), volume: $('out-volume'), rimA: $('out-rim-a'), rimB: $('out-rim-b') };
+  let fixtureType = 'classic';   // 'classic' | 'nautilus' | 'mixed' (A classic, B nautilus)
+
+  // The two fixtures as the physics sees them.
+  function readUrinals() {
+    const cakes = $('cakes').checked;
+    return P.SLOTS.map(sl => {
+      const type = fixtureType === 'mixed' ? (sl.id === 'A' ? 'classic' : 'nautilus') : fixtureType;
+      const rim = +(sl.id === 'A' ? el.rimA : el.rimB).value / 100;
+      return P.makeUrinal(type, sl.id, rim, cakes);
+    });
+  }
+  function rimNote(cm) {
+    if (cm <= 43) return 'ADA accessible';
+    if (cm >= 58 && cm <= 64) return 'US standard';
+    return cm < 58 ? 'low' : 'high';
+  }
+  const fmtRim = cm => cm + ' cm \u00b7 ' + (cm / 2.54).toFixed(0) + ' in \u00b7 ' + rimNote(cm);
   const jetArea = Math.PI * P.C.jetD * P.C.jetD / 4;
 
   function readParams() {
@@ -44,6 +61,9 @@
     out.standoff.textContent = el.standoff.value + ' cm';
     out.volume.textContent = p.volumeMl + ' mL · ' + (p.volumeMl / Q).toFixed(0) + ' s';
     document.querySelectorAll('.pill[data-v]').forEach(b => b.setAttribute('aria-pressed', String(Math.abs(+b.dataset.v - p.v) < 0.05)));
+    out.rimA.textContent = fmtRim(+el.rimA.value);
+    out.rimB.textContent = fmtRim(+el.rimB.value);
+    document.querySelectorAll('.pill[data-type]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.type === fixtureType)));
   }
 
   let debounce = 0;
@@ -52,6 +72,12 @@
     clearTimeout(debounce);
     debounce = setTimeout(compute, 220);
   }));
+  document.querySelectorAll('.pill[data-type]').forEach(b => b.addEventListener('click', () => {
+    fixtureType = b.dataset.type;
+    updateReadouts();
+    compute();
+  }));
+  $('cakes').addEventListener('change', compute);
   document.querySelectorAll('.pill[data-v]').forEach(b => b.addEventListener('click', () => {
     el.velocity.value = b.dataset.v;
     updateReadouts();
@@ -64,7 +90,7 @@
 
   function compute() {
     const p = readParams();
-    results = P.URINALS.map((u, i) => {
+    results = readUrinals().map((u, i) => {
       // A large unrecorded run gives stable totals (hand hits are rare
       // events); a smaller recorded run supplies the droplet paths drawn in flight.
       const stats = P.simulate(u, p, { nDrops: N_STATS, seed: 1000 + 77 * i });
@@ -93,6 +119,7 @@
     if (r.status === 'wall') return ['Over the top', 'bad'];
     const m = r.onPersonMl;
     if (r.status === 'rim' && m < 0.05) return ['Hit the rim', 'warn'];
+    if (r.status === 'cake' && m < 0.05) return ['Hit the cake', 'warn'];
     if (m < 0.005) return ['Bone dry', 'good'];
     if (m < 0.05) return ['Misted', 'good'];
     if (m < 0.3) return ['Speckled', 'warn'];
@@ -105,6 +132,7 @@
     switch (r.status) {
       case 'bowl': return 'Bowl, ' + (im.y * 100).toFixed(0) + ' cm up';
       case 'rim': return 'Rim or outer face';
+      case 'cake': return 'The urinal cake';
       case 'wall': return 'Wall above the fixture';
       case 'shoes': return 'Your shoes';
       case 'floor': {
@@ -150,12 +178,22 @@
   }
 
   function verdictHTML() {
-    return verdictMain() + handsLine();
+    return verdictMain() + fixtureLine() + handsLine();
+  }
+
+  function fixtureLine() {
+    const [a, b] = results.map(r => r.urinal);
+    const rims = Math.round(a.rim * 100) + ' cm at A vs ' + Math.round(b.rim * 100) + ' cm at B';
+    if (a.type === b.type) {
+      return ' <span class="hands-note">Both stalls have the same ' + a.name + (a.cake ? ' with a cake' : '') +
+        ', so the only difference is rim height: ' + rims + '.</span>';
+    }
+    return ' <span class="hands-note">Different fixtures (' + a.name + ' vs ' + b.name + ') with rims at ' + rims + ', so model and height both vary.</span>';
   }
 
   function verdictMain() {
     const [a, b] = results;
-    const ok = r => r.status === 'bowl' || r.status === 'rim';
+    const ok = r => r.status === 'bowl' || r.status === 'rim' || r.status === 'cake';
     if (!ok(a) && !ok(b)) {
       return '<strong>Neither urinal catches the stream.</strong> At ' + a.params.v.toFixed(1) + ' m/s it lands on the ' +
         (a.status === 'shoes' ? 'shoes' : a.status) + ' at A and the ' + (b.status === 'shoes' ? 'shoes' : b.status) +
@@ -224,7 +262,8 @@
     const dl = rows.map(([k, v]) => '<dt>' + k + '</dt><dd>' + v + '</dd>').join('');
 
     return '<article class="card" id="card-' + i + '">' +
-      '<header class="card-head"><div class="tag">' + u.id + '</div><div><h3>' + u.name + '</h3><p>' + u.blurb + '</p></div></header>' +
+      '<header class="card-head"><div class="tag">' + u.id + '</div><div><h3>' + u.name + '</h3><p><strong>Rim ' + Math.round(u.rim * 100) + ' cm (' + (u.rim * 100 / 2.54).toFixed(0) + ' in), ' +
+      rimNote(Math.round(u.rim * 100)) + '.</strong> ' + u.blurb + (u.cake ? ' Urinal cake in the bowl.' : '') + '</p></div></header>' +
       '<div class="score"><div><div class="big num">' + fmtMl(r.onPersonMl) + '<small>mL on you</small></div><div class="sub">' + sub +
       '</div></div><span class="grade ' + cls + '">' + label + '</span></div>' +
       splitHTML(r) +
@@ -264,7 +303,8 @@
   function renderReport() {
     const p = results[0].params;
     $('report-params').textContent = (p.H * 100).toFixed(0) + ' cm · ' + p.v.toFixed(1) + ' m/s · aim ' + fmtAim(p.aim) +
-      ' · ' + (p.standoff * 100).toFixed(0) + ' cm stand-off · ' + p.volumeMl + ' mL';
+      ' · ' + (p.standoff * 100).toFixed(0) + ' cm stand-off · ' + p.volumeMl + ' mL · rims ' +
+      results.map(r => Math.round(r.urinal.rim * 100)).join(' / ') + ' cm';
     $('verdict').innerHTML = verdictHTML();
     let zMax = 0.01;
     for (const r of results) for (const z of P.ZONES) zMax = Math.max(zMax, r.zones[z.id]);
@@ -320,6 +360,13 @@
     g.strokeStyle = t.faint;
     g.lineWidth = 1;
     g.stroke();
+    if (u.cake) {
+      g.beginPath();
+      u.cake.pts.forEach(([z, y], k) => k ? g.lineTo(X(z), Y(y)) : g.moveTo(X(z), Y(y)));
+      g.closePath();
+      g.fillStyle = '#4fa3c7';
+      g.fill();
+    }
     // person, side-on
     g.fillStyle = t.faint;
     g.globalAlpha = 0.45;
@@ -502,7 +549,7 @@
   // ---------------------------------------------------------------- stance search
   function findStance(i) {
     const btn = $('stance-' + i), outEl = $('stance-out-' + i);
-    const u = P.URINALS[i];
+    const u = results[i].urinal;
     const base = readParams();
     const aims = [], offs = [];
     for (let a = -60; a <= 10; a += 5) aims.push(a);
@@ -513,7 +560,7 @@
       const aim = aims[ai];
       for (const standoff of offs) {
         const r = P.simulate(u, Object.assign({}, base, { aim, standoff }), { nDrops: 300, seed: 99 });
-        if (r.status !== 'bowl') continue;
+        if (r.status !== 'bowl' && r.status !== 'cake') continue;
         const score = r.onPersonMl + 0.001 * r.splashMl;
         if (!best || score < best.score - 1e-9) best = { aim, standoff, score, ml: r.onPersonMl };
       }
@@ -664,7 +711,6 @@
     const porcelain = new T.MeshStandardMaterial({ color: 0xf6f8f9, roughness: 0.2, metalness: 0.02 });
     const chrome = new T.MeshStandardMaterial({ color: 0xcfd6da, roughness: 0.22, metalness: 0.55 });
     const dark = new T.MeshStandardMaterial({ color: 0x4a5553, roughness: 0.5, metalness: 0.3 });
-    const flangeMats = [];
 
     function extrudeX(pts, depth, bevel) {
       const shape = new T.Shape();
@@ -690,85 +736,92 @@
       g.fillText(u.id, 30, 100);
       g.fillStyle = '#e6eeeb';
       g.font = '800 46px "Big Shoulders Display", "Arial Narrow", sans-serif';
-      const words = u.name.toUpperCase().split(' ');
-      g.fillText(words.slice(0, -1).join(' '), 150, 72);
-      g.fillText(words[words.length - 1], 150, 124);
+      g.fillText(u.type.toUpperCase(), 150, 72);
+      g.fillText('RIM ' + Math.round(u.rim * 100) + ' CM', 150, 124);
       const tex = new T.CanvasTexture(c);
       tex.encoding = T.sRGBEncoding;
       return tex;
     }
-    const signs = [];
-    const cakes = [];
     const cakeMat = new T.MeshStandardMaterial({ color: 0x4fa3c7, roughness: 0.8 });
-    const cakeGeoA = new T.CylinderGeometry(0.04, 0.042, 0.016, 20);
-    const cakeGeoB = new T.CylinderGeometry(0.034, 0.036, 0.016, 20);
-    P.URINALS.forEach(u => {
-      const grp = new T.Group();
-      grp.position.x = u.x;
-      const inner = u.width - 0.05;
-      const body = new T.Mesh(extrudeX(u.profile, inner, 0.012), porcelain);
-      body.castShadow = body.receiveShadow = true;
-      grp.add(body);
-      const hull = u.profile.slice(0, u.interior[0] + 1).concat(u.profile.slice(u.interior[1]));
-      const fm = porcelain.clone();
-      flangeMats.push(fm);
-      for (const sd of [1, -1]) {
-        const fl = new T.Mesh(extrudeX(hull, 0.024, 0.006), fm);
-        fl.position.x = sd * (u.width / 2 - 0.012);
-        fl.castShadow = true;
-        fl.renderOrder = 2;
-        grp.add(fl);
+    const flyMat = new T.MeshBasicMaterial({ color: 0x222222 });
+    let fixtures = [];          // one group per stall
+    let fixtureKey = '';
+
+    // (Re)build both fixtures from the physics description, so what you see is
+    // exactly what the stream and droplets collide with.
+    function buildFixtures(urinals) {
+      const key = urinals.map(u => u.type + u.rim.toFixed(3) + !!u.cake).join('|');
+      if (key === fixtureKey) return;
+      fixtureKey = key;
+      for (const f of fixtures) {
+        scene.remove(f.grp);
+        f.grp.traverse(o => { if (o.isMesh && o.geometry) o.geometry.dispose(); });
+        f.sign.material.map.dispose();
       }
-      // drain
-      const drain = new T.Mesh(new T.CylinderGeometry(0.03, 0.03, 0.006, 20), dark);
-      drain.position.set(0, u.drain[1] + 0.004, u.drain[0]);
-      grp.add(drain);
-      // flush valve
-      const riser = new T.Mesh(new T.CylinderGeometry(0.013, 0.013, 0.3, 12), chrome);
-      riser.position.set(0, u.topY + 0.15, 0.07);
-      grp.add(riser);
-      const valve = new T.Mesh(new T.CylinderGeometry(0.032, 0.032, 0.11, 16), chrome);
-      valve.position.set(0, u.topY + 0.32, 0.07);
-      grp.add(valve);
-      const supply = new T.Mesh(new T.CylinderGeometry(0.013, 0.013, 0.07, 12), chrome);
-      supply.rotation.x = Math.PI / 2;
-      supply.position.set(0, u.topY + 0.34, 0.035);
-      grp.add(supply);
-      const handle = new T.Mesh(new T.CylinderGeometry(0.006, 0.006, 0.11, 8), chrome);
-      handle.rotation.z = Math.PI / 2;
-      handle.position.set(0.07, u.topY + 0.3, 0.09);
-      grp.add(handle);
-      // urinal cake: flat in A's bowl; in B it rests on the ramp below the lip,
-      // since B's drain is hidden under the hood from every camera
-      const cake = new T.Mesh(u.id === 'A' ? cakeGeoA : cakeGeoB, cakeMat);
-      if (u.id === 'A') {
-        cake.position.set(-0.07, 0.578, 0.21);
-      } else {
-        cake.position.set(0, 0.557, 0.345);
-        cake.rotation.x = -0.5;
-      }
-      cake.castShadow = true;
-      grp.add(cake);
-      cakes.push(cake);
-      if (u.id === 'B') {
-        // the etched fly on the ramp
-        const fly = new T.Mesh(new T.CircleGeometry(0.011, 12), new T.MeshBasicMaterial({ color: 0x222222 }));
-        fly.scale.set(1, 1.7, 1);
-        fly.position.set(0, 0.486, 0.25);
-        fly.lookAt(new T.Vector3(0, 0.486 + 0.82, 0.25 - 0.57));
-        fly.position.addScaledVector(new T.Vector3(0, 0.82, -0.57), 0.002);
-        grp.add(fly);
-      }
-      const sign = new T.Mesh(new T.PlaneGeometry(0.4, 0.15), new T.MeshBasicMaterial({ map: signTexture(u) }));
-      sign.position.set(0, 1.78, 0.004);
-      grp.add(sign);
-      signs.push(sign);
-      scene.add(grp);
-    });
+      fixtures = urinals.map(u => {
+        const grp = new T.Group();
+        grp.position.x = u.x;
+        const inner = u.width - 0.05;
+        const body = new T.Mesh(extrudeX(u.profile, inner, 0.012), porcelain);
+        body.castShadow = body.receiveShadow = true;
+        grp.add(body);
+        const hull = u.profile.slice(0, u.interior[0] + 1).concat(u.profile.slice(u.interior[1]));
+        for (const sd of [1, -1]) {
+          const fl = new T.Mesh(extrudeX(hull, 0.024, 0.006), flangeMat);
+          fl.position.x = sd * (u.width / 2 - 0.012);
+          fl.castShadow = true;
+          fl.renderOrder = 2;
+          grp.add(fl);
+        }
+        // drain
+        const drain = new T.Mesh(new T.CylinderGeometry(0.03, 0.03, 0.006, 20), dark);
+        drain.position.set(0, u.drain[1] + 0.004, u.drain[0]);
+        grp.add(drain);
+        // flush valve
+        const riser = new T.Mesh(new T.CylinderGeometry(0.013, 0.013, 0.3, 12), chrome);
+        riser.position.set(0, u.topY + 0.15, 0.07);
+        const valve = new T.Mesh(new T.CylinderGeometry(0.032, 0.032, 0.11, 16), chrome);
+        valve.position.set(0, u.topY + 0.32, 0.07);
+        const supply = new T.Mesh(new T.CylinderGeometry(0.013, 0.013, 0.07, 12), chrome);
+        supply.rotation.x = Math.PI / 2;
+        supply.position.set(0, u.topY + 0.34, 0.035);
+        const handle = new T.Mesh(new T.CylinderGeometry(0.006, 0.006, 0.11, 8), chrome);
+        handle.rotation.z = Math.PI / 2;
+        handle.position.set(0.07, u.topY + 0.3, 0.09);
+        grp.add(riser, valve, supply, handle);
+        // urinal cake, standing on the surface along its normal; lifted by the
+        // porcelain's rounded edge so it sits on the visible surface
+        if (u.cake) {
+          const ck = u.cake;
+          const cake = new T.Mesh(new T.CylinderGeometry(ck.r, ck.r * 1.05, ck.h, 22), cakeMat);
+          const n = new T.Vector3(0, ck.n[1], ck.n[0]);
+          cake.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), n);
+          cake.position.set(0, ck.center[1], ck.center[0]).addScaledVector(n, 0.007);
+          cake.castShadow = true;
+          grp.add(cake);
+        }
+        if (u.type === 'nautilus') {
+          // the etched fly on the ramp
+          const dy = u.rim - P.TEMPLATES.nautilus.rimY;
+          const fly = new T.Mesh(new T.CircleGeometry(0.011, 12), flyMat);
+          fly.scale.set(1, 1.7, 1);
+          fly.position.set(0, 0.486 + dy, 0.25);
+          fly.lookAt(new T.Vector3(0, 0.486 + dy + 0.82, 0.25 - 0.57));
+          fly.position.addScaledVector(new T.Vector3(0, 0.82, -0.57), 0.009);
+          grp.add(fly);
+        }
+        const sign = new T.Mesh(new T.PlaneGeometry(0.4, 0.15), new T.MeshBasicMaterial({ map: signTexture(u) }));
+        sign.position.set(0, Math.max(1.78, u.topY + 0.62), 0.004);
+        grp.add(sign);
+        scene.add(grp);
+        return { grp, sign, u };
+      });
+    }
+    const flangeMat = porcelain.clone();
     // redraw sign text once the display font arrives
     if (document.fonts && document.fonts.load) {
       document.fonts.load('900 40px "Big Shoulders Display"').then(() => {
-        signs.forEach((s, k) => { s.material.map = signTexture(P.URINALS[k]); s.material.needsUpdate = true; });
+        fixtures.forEach(f => { f.sign.material.map.dispose(); f.sign.material.map = signTexture(f.u); f.sign.material.needsUpdate = true; });
       }).catch(() => {});
     }
     // privacy partition
@@ -782,17 +835,11 @@
     edge.position.set(PT.x, (PT.y0 + PT.y1) / 2, PT.zMax);
     scene.add(edge);
 
-    function setCakes(on) {
-      cakes.forEach(c => { c.visible = on; });
-    }
-
     function setCutaway(on) {
-      flangeMats.forEach(m => {
-        m.transparent = on;
-        m.opacity = on ? 0.26 : 1;
-        m.depthWrite = !on;
-        m.needsUpdate = true;
-      });
+      flangeMat.transparent = on;
+      flangeMat.opacity = on ? 0.26 : 1;
+      flangeMat.depthWrite = !on;
+      flangeMat.needsUpdate = true;
     }
 
     // ---------- person ----------
@@ -971,6 +1018,7 @@
     }
 
     function load(res) {
+      buildFixtures(res.map(r => r.urinal));
       disposeRuns();
       runs = res.map((r, i) => {
         const R = { r, i };
@@ -1348,7 +1396,6 @@
       setSlow(on) { speed = on ? 0.25 : 1; },
       setCam,
       setCutaway,
-      setCakes,
     };
   }
 
@@ -1364,7 +1411,6 @@
     $('phase-text').textContent = '3D view unavailable';
   } else {
     view.setCutaway($('cutaway').checked);
-    view.setCakes($('cakes').checked);
   }
   compute();
 
@@ -1375,6 +1421,5 @@
     if (view) view.setSlow(on);
   });
   $('cutaway').addEventListener('change', e => view && view.setCutaway(e.target.checked));
-  $('cakes').addEventListener('change', e => view && view.setCakes(e.target.checked));
   ['follow', 'overview', 'free'].forEach(m => $('cam-' + m).addEventListener('click', () => view && view.setCam(m)));
 })();

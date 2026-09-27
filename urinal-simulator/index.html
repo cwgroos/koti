@@ -164,7 +164,8 @@
   .controls h2,.section-h{font:800 13px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
   .field{display:flex;flex-direction:column;gap:6px}
   .field-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
-  .field label{font-weight:600;font-size:14px}
+  .field label,.field .lbl{font-weight:600;font-size:14px}
+  .controls .sub-h{border-top:1px solid var(--line);padding-top:14px}
   .field output{font:500 13px var(--mono);font-variant-numeric:tabular-nums;color:var(--ink);text-align:right}
   .field .hint{font-size:12.5px;color:var(--muted)}
   input[type=range]{width:100%;accent-color:var(--accent-strong);margin:2px 0;height:22px}
@@ -323,7 +324,7 @@
         <h1>Urinal Simulator <span class="pm">Pro Max</span></h1>
       </div>
     </div>
-    <p class="lede">Set your height and stream velocity. Two identical test subjects walk in and use urinals A and B side by side, at the same moment. A Monte-Carlo splash model traces every returning droplet to the exact spot on their hands and trousers where it lands.</p>
+    <p class="lede">Set your height and stream velocity. Two identical test subjects walk in and use urinals A and B side by side, at the same moment. By default both are the same fixture mounted at different heights, so rim height is the only difference. A Monte-Carlo splash model traces every returning droplet to the exact spot on their hands and trousers where it lands.</p>
   </header>
 
   <main class="lab">
@@ -362,6 +363,24 @@
           <button type="button" class="pill" data-v="4.2">Morning 4.2</button>
         </div>
       </div>
+      <h2 class="sub-h">Fixtures</h2>
+      <div class="field">
+        <span class="lbl" id="type-l">Urinal model</span>
+        <div class="presets" role="group" aria-labelledby="type-l">
+          <button type="button" class="pill" data-type="classic" aria-pressed="true">Classic in both</button>
+          <button type="button" class="pill" data-type="nautilus" aria-pressed="false">Nautilus in both</button>
+          <button type="button" class="pill" data-type="mixed" aria-pressed="false">Classic vs Nautilus</button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-top"><label for="rim-a">Urinal A rim</label><output id="out-rim-a" for="rim-a"></output></div>
+        <input type="range" id="rim-a" min="38" max="75" step="1" value="61">
+      </div>
+      <div class="field">
+        <div class="field-top"><label for="rim-b">Urinal B rim</label><output id="out-rim-b" for="rim-b"></output></div>
+        <input type="range" id="rim-b" min="38" max="75" step="1" value="43">
+      </div>
+      <label class="check"><input type="checkbox" id="cakes" checked> Urinal cakes (rough; splash more when hit)</label>
       <details class="tech" id="tech">
         <summary>Technique</summary>
         <div class="inner">
@@ -384,7 +403,6 @@
         <button type="button" class="btn primary" id="replay">Replay</button>
         <button type="button" class="btn" id="slowmo" aria-pressed="false">Slow motion</button>
         <label class="check"><input type="checkbox" id="cutaway" checked> Cutaway fixtures</label>
-        <label class="check"><input type="checkbox" id="cakes" checked> Urinal cakes</label>
       </div>
     </aside>
   </main>
@@ -410,8 +428,9 @@
       <h3>Sources</h3>
       <ul>
         <li>Hurd, Truscott et al., BYU Splash Lab, <em>Urinal dynamics</em>, APS Division of Fluid Dynamics (2013): stream breakup distance and the case for standing closer and aiming at a glancing angle.</li>
-        <li>Pan, Hood et al., University of Waterloo (2022, <em>PNAS Nexus</em>): the critical-angle argument and the low-angle "Nautilus" fixture that urinal B is modelled on.</li>
+        <li>Pan, Hood et al., University of Waterloo (2022, <em>PNAS Nexus</em>): the critical-angle argument and the low-angle "Nautilus" fixture that the Nautilus option is modelled on.</li>
         <li>Thoroddsen (2002), <em>J. Fluid Mech.</em>: the ejecta sheet, whose droplets leave faster than the impacting drop.</li>
+        <li>Range &amp; Feuillebois (1998), <em>J. Colloid Interface Sci.</em>: surface roughness lowers the splash threshold, which is why a urinal cake splashes more than glazed porcelain.</li>
         <li>Mundo, Sommerfeld &amp; Tropea (1995), <em>Int. J. Multiphase Flow</em>: the K splashing threshold for drop–wall impacts.</li>
         <li>Lord Rayleigh (1878), <em>On the instability of jets</em>; Drillis &amp; Contini (1966) for the body proportions.</li>
       </ul>
